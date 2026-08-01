@@ -120,6 +120,32 @@ function normalizeReceitaWs(raw) {
   };
 }
 
+
+function toClientData(data) {
+  const source = clean(data.fonte_cnpj || data.fonte || 'Consulta pública');
+  const consultedAt = new Date().toISOString();
+
+  return {
+    ...data,
+
+    // Nomes usados pelo formulário web.
+    razaoSocial: clean(data.razao_social),
+    nomeFantasia: clean(data.nome_fantasia),
+    dataAbertura: clean(data.data_abertura),
+    situacaoCadastral: clean(data.situacao_cadastral),
+    naturezaJuridica: clean(data.natureza_juridica),
+    cnaePrincipal: clean(data.cnae_principal),
+    cidade: clean(data.cidade),
+    estado: clean(data.estado, 2).toUpperCase(),
+    fontes: source ? [source] : [],
+    consultadoEm: consultedAt,
+
+    // Nomes antigos mantidos para compatibilidade.
+    fonte: source,
+    consultado_em: consultedAt
+  };
+}
+
 async function fetchJson(url, normalizer, timeoutMs = 9000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort('timeout'), timeoutMs);
@@ -156,7 +182,7 @@ async function fetchJson(url, normalizer, timeoutMs = 9000) {
 async function lookup(cnpj) {
   const primarySources = [
     fetchJson(`https://brasilapi.com.br/api/cnpj/v1/${encodeURIComponent(cnpj)}`, normalizeBrasilApi),
-    fetchJson(`https://api.opencnpj.org/${encodeURIComponent(cnpj)}`, normalizeOpenCnpj),
+    fetchJson(`https://kitana.opencnpj.com/cnpj/${encodeURIComponent(cnpj)}`, normalizeOpenCnpj),
     fetchJson(`https://minhareceita.org/${encodeURIComponent(cnpj)}`, normalizeMinhaReceita)
   ];
 
@@ -210,14 +236,15 @@ export async function onRequest(context) {
     }
 
     const data = await lookup(cnpj);
+    const clientData = toClientData(data);
 
-    // Retorna o conteúdo também no nível principal para compatibilidade com versões anteriores.
+    // Retorna os dois padrões de nomes para compatibilidade.
     return json(200, {
       ok: true,
-      data,
-      ...data,
-      source: data.fonte_cnpj,
-      fonte: data.fonte_cnpj
+      data: clientData,
+      ...clientData,
+      source: clientData.fonte_cnpj,
+      fonte: clientData.fonte_cnpj
     });
   } catch (error) {
     console.error('[cnpj-lookup]', error.message);

@@ -40,7 +40,7 @@
       nomeFantasia: cleanText(raw.nome_fantasia),
       dataAbertura: normalizeDate(raw.data_inicio_atividade),
       situacaoCadastral: firstText(raw.descricao_situacao_cadastral, raw.situacao_cadastral),
-      naturezaJuridica: cleanText(raw.natureza_juridica),
+      naturezaJuridica: firstText(raw.descricao_natureza_juridica, raw.natureza_juridica),
       cnaePrincipal: [cleanText(raw.cnae_fiscal), cleanText(raw.cnae_fiscal_descricao)].filter(Boolean).join(' — '),
       email: cleanText(raw.email, 254).toLowerCase(),
       telefone: cleanText(firstText(raw.ddd_telefone_1, raw.ddd_telefone_2)).replace(/\D/g, '').slice(0, 11),
@@ -80,6 +80,67 @@
     };
   }
 
+
+  function normalizeFunctionResponse(raw) {
+    const data = raw?.data || raw || {};
+    const source = firstText(
+      Array.isArray(data.fontes) ? data.fontes.join(', ') : data.fontes,
+      data.fonte,
+      data.fonte_cnpj,
+      raw?.source,
+      raw?.fonte
+    );
+
+    return {
+      cnpj: normalizeCnpj(firstText(data.cnpj)),
+      razaoSocial: firstText(data.razaoSocial, data.razao_social, data.nome, data.legalName),
+      nomeFantasia: firstText(data.nomeFantasia, data.nome_fantasia, data.fantasia, data.tradeName),
+      dataAbertura: normalizeDate(firstText(
+        data.dataAbertura,
+        data.data_abertura,
+        data.data_inicio_atividade,
+        data.abertura,
+        data.openingDate
+      )),
+      situacaoCadastral: firstText(
+        data.situacaoCadastral,
+        data.situacao_cadastral,
+        data.descricao_situacao_cadastral,
+        data.situacao,
+        data.status
+      ),
+      naturezaJuridica: firstText(
+        data.naturezaJuridica,
+        data.natureza_juridica,
+        data.descricao_natureza_juridica,
+        data.legalNature
+      ),
+      cnaePrincipal: firstText(
+        data.cnaePrincipal,
+        data.cnae_principal,
+        data.cnae_fiscal_descricao,
+        data.mainActivity
+      ),
+      email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
+      telefone: cleanText(firstText(data.telefone, data.phone))
+        .replace(/\D/g, '')
+        .slice(0, 11),
+      cep: cleanText(firstText(data.cep, data.zip))
+        .replace(/\D/g, '')
+        .slice(0, 8),
+      logradouro: firstText(data.logradouro, data.endereco, data.address),
+      numero: firstText(data.numero, data.number),
+      complemento: firstText(data.complemento, data.complement),
+      bairro: firstText(data.bairro, data.neighborhood),
+      cidade: firstText(data.cidade, data.municipio, data.city),
+      estado: cleanText(firstText(data.estado, data.uf, data.state), 2).toUpperCase(),
+      fontes: source
+        ? source.split(',').map((item) => cleanText(item)).filter(Boolean)
+        : [],
+      consultadoEm: firstText(data.consultadoEm, data.consultado_em) || new Date().toISOString()
+    };
+  }
+
   async function accessToken() {
     const client = window.database?.client;
     if (!client) return '';
@@ -116,7 +177,7 @@
       throw error;
     }
     return {
-      data: payload.data || {},
+      data: normalizeFunctionResponse(payload.data || payload),
       attempts: payload.attempts || [],
       cached: Boolean(payload.cached),
       mode: 'function'

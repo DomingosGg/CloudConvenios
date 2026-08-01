@@ -1,1 +1,1 @@
-8.4.0 - Correção da página de usuários e rolagem horizontal do Kanban
+﻿8.4.3 - Correção do preenchimento automático dos dados cadastrais por CNPJ
