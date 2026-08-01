@@ -133,17 +133,67 @@
     });
   }
 
-  async function loadProfile(userId) {
-    const { data, error } = await client
-      .from('usuarios')
-      .select('id,nome,email,perfil_id,polo,ativo,ultimo_acesso')
-      .eq('id', userId)
-      .single();
+  const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-    if (error) throw error;
-    if (!data) throw new Error('Perfil de usuário não encontrado.');
-    if (!data.ativo) throw new Error('Este usuário está bloqueado. Procure um administrador.');
-    return data;
+  function errorText(error) {
+    return String(error?.message || error?.error_description || '').toLowerCase();
+  }
+
+  function isTransientSessionError(error) {
+    const message = errorText(error);
+    return message.includes('fetch')
+      || message.includes('network')
+      || message.includes('timeout')
+      || message.includes('failed to')
+      || message.includes('jwt expired')
+      || message.includes('invalid jwt')
+      || message.includes('token is unverifiable')
+      || message.includes('unrecognized jwt kid');
+  }
+
+  function isPermanentAccessError(error) {
+    const message = errorText(error);
+    return message.includes('perfil de usuário não encontrado')
+      || message.includes('usuário está bloqueado')
+      || message.includes('user is banned')
+      || message.includes('invalid refresh token')
+      || message.includes('refresh token not found');
+  }
+
+  async function loadProfile(userId) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data, error } = await client
+        .from('usuarios')
+        .select('id,nome,email,perfil_id,polo,ativo,ultimo_acesso')
+        .eq('id', userId)
+        .single();
+
+      if (!error && data) {
+        if (!data.ativo) throw new Error('Este usuário está bloqueado. Procure um administrador.');
+        return data;
+      }
+
+      lastError = error || new Error('Perfil de usuário não encontrado.');
+
+      if (attempt === 0 && isTransientSessionError(lastError)) {
+        try {
+          await client.auth.refreshSession();
+        } catch (refreshError) {
+          console.warn('[Auth] Não foi possível renovar a sessão durante a validação do perfil:', refreshError);
+        }
+      }
+
+      if (attempt < 2 && !isPermanentAccessError(lastError)) {
+        await wait(350 * (attempt + 1));
+        continue;
+      }
+
+      break;
+    }
+
+    throw lastError || new Error('Perfil de usuário não encontrado.');
   }
 
   async function registerLastAccess() {
@@ -281,8 +331,26 @@
       document.dispatchEvent(new CustomEvent('auth:ready', { detail: window.currentUser }));
     } catch (error) {
       if (requestId !== activationId) return;
-      nextSignedOutNotice = { message: authErrorMessage(error), type: 'error' };
-      await client.auth.signOut();
+
+      const message = authErrorMessage(error);
+      console.error('[Auth] Falha ao ativar a sessão:', error);
+
+      if (isPermanentAccessError(error)) {
+        nextSignedOutNotice = { message, type: 'error' };
+        await client.auth.signOut({ scope: 'local' });
+        return;
+      }
+
+      document.body.classList.remove('auth-pending', 'authenticated');
+      document.body.classList.add('auth-guest');
+      $('#mainApplication')?.setAttribute('aria-hidden', 'true');
+      $('#authShell')?.setAttribute('aria-hidden', 'false');
+      setView('loginForm');
+      setMessage(
+        'loginMessage',
+        'Não foi possível concluir a validação agora. Sua sessão foi preservada; aguarde alguns segundos e tente entrar novamente.',
+        'warning'
+      );
     }
   }
 
@@ -543,7 +611,17 @@
         return;
       }
       if (event === 'SIGNED_IN' && manualLoginInProgress) return;
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN') {
+        const sameUserAlreadyActive = Boolean(
+          session?.user?.id
+          && window.currentUser?.id === session.user.id
+          && document.body.classList.contains('authenticated')
+        );
+        if (sameUserAlreadyActive) return;
+        setTimeout(() => activateSession(session), 0);
+        return;
+      }
+      if (event === 'INITIAL_SESSION') {
         setTimeout(() => activateSession(session), 0);
         return;
       }
@@ -576,7 +654,7 @@
         console.warn('[Auth] Tempo limite da validação inicial atingido. Exibindo o login.');
         showGuest('A validação automática demorou mais que o esperado. Informe seu e-mail e senha para entrar.', 'warning');
       }
-    }, 12000);
+    }, 20000);
 
     Promise.resolve(boot()).catch((error) => {
       console.error('[Auth] Falha durante a inicialização:', error);

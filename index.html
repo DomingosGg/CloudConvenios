@@ -2301,17 +2301,67 @@ window.APP_CONFIG = Object.freeze({
     });
   }
 
-  async function loadProfile(userId) {
-    const { data, error } = await client
-      .from('usuarios')
-      .select('id,nome,email,perfil_id,polo,ativo,ultimo_acesso')
-      .eq('id', userId)
-      .single();
+  const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-    if (error) throw error;
-    if (!data) throw new Error('Perfil de usuário não encontrado.');
-    if (!data.ativo) throw new Error('Este usuário está bloqueado. Procure um administrador.');
-    return data;
+  function errorText(error) {
+    return String(error?.message || error?.error_description || '').toLowerCase();
+  }
+
+  function isTransientSessionError(error) {
+    const message = errorText(error);
+    return message.includes('fetch')
+      || message.includes('network')
+      || message.includes('timeout')
+      || message.includes('failed to')
+      || message.includes('jwt expired')
+      || message.includes('invalid jwt')
+      || message.includes('token is unverifiable')
+      || message.includes('unrecognized jwt kid');
+  }
+
+  function isPermanentAccessError(error) {
+    const message = errorText(error);
+    return message.includes('perfil de usuário não encontrado')
+      || message.includes('usuário está bloqueado')
+      || message.includes('user is banned')
+      || message.includes('invalid refresh token')
+      || message.includes('refresh token not found');
+  }
+
+  async function loadProfile(userId) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data, error } = await client
+        .from('usuarios')
+        .select('id,nome,email,perfil_id,polo,ativo,ultimo_acesso')
+        .eq('id', userId)
+        .single();
+
+      if (!error && data) {
+        if (!data.ativo) throw new Error('Este usuário está bloqueado. Procure um administrador.');
+        return data;
+      }
+
+      lastError = error || new Error('Perfil de usuário não encontrado.');
+
+      if (attempt === 0 && isTransientSessionError(lastError)) {
+        try {
+          await client.auth.refreshSession();
+        } catch (refreshError) {
+          console.warn('[Auth] Não foi possível renovar a sessão durante a validação do perfil:', refreshError);
+        }
+      }
+
+      if (attempt < 2 && !isPermanentAccessError(lastError)) {
+        await wait(350 * (attempt + 1));
+        continue;
+      }
+
+      break;
+    }
+
+    throw lastError || new Error('Perfil de usuário não encontrado.');
   }
 
   async function registerLastAccess() {
@@ -2449,8 +2499,26 @@ window.APP_CONFIG = Object.freeze({
       document.dispatchEvent(new CustomEvent('auth:ready', { detail: window.currentUser }));
     } catch (error) {
       if (requestId !== activationId) return;
-      nextSignedOutNotice = { message: authErrorMessage(error), type: 'error' };
-      await client.auth.signOut();
+
+      const message = authErrorMessage(error);
+      console.error('[Auth] Falha ao ativar a sessão:', error);
+
+      if (isPermanentAccessError(error)) {
+        nextSignedOutNotice = { message, type: 'error' };
+        await client.auth.signOut({ scope: 'local' });
+        return;
+      }
+
+      document.body.classList.remove('auth-pending', 'authenticated');
+      document.body.classList.add('auth-guest');
+      $('#mainApplication')?.setAttribute('aria-hidden', 'true');
+      $('#authShell')?.setAttribute('aria-hidden', 'false');
+      setView('loginForm');
+      setMessage(
+        'loginMessage',
+        'Não foi possível concluir a validação agora. Sua sessão foi preservada; aguarde alguns segundos e tente entrar novamente.',
+        'warning'
+      );
     }
   }
 
@@ -2711,7 +2779,17 @@ window.APP_CONFIG = Object.freeze({
         return;
       }
       if (event === 'SIGNED_IN' && manualLoginInProgress) return;
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN') {
+        const sameUserAlreadyActive = Boolean(
+          session?.user?.id
+          && window.currentUser?.id === session.user.id
+          && document.body.classList.contains('authenticated')
+        );
+        if (sameUserAlreadyActive) return;
+        setTimeout(() => activateSession(session), 0);
+        return;
+      }
+      if (event === 'INITIAL_SESSION') {
         setTimeout(() => activateSession(session), 0);
         return;
       }
@@ -2744,7 +2822,7 @@ window.APP_CONFIG = Object.freeze({
         console.warn('[Auth] Tempo limite da validação inicial atingido. Exibindo o login.');
         showGuest('A validação automática demorou mais que o esperado. Informe seu e-mail e senha para entrar.', 'warning');
       }
-    }, 12000);
+    }, 20000);
 
     Promise.resolve(boot()).catch((error) => {
       console.error('[Auth] Falha durante a inicialização:', error);
@@ -4491,7 +4569,6 @@ window.APP_CONFIG = Object.freeze({
       let message = 'A função foi publicada, mas as variáveis do Supabase não estão completas.';
       if (!health.supabaseUrlConfigured) message = 'Configure SUPABASE_URL em Settings → Variables and Secrets no Cloudflare Pages.';
       else if (!health.serverKeyConfigured) message = 'Configure SUPABASE_SECRET_KEY como segredo no Cloudflare Pages e faça um novo deploy.';
-      else if (!health.publishableKeyConfigured) message = 'Configure SUPABASE_PUBLISHABLE_KEY no Cloudflare Pages e faça um novo deploy.';
       else if (health.serverKeyType === 'publishable_incorreta') message = 'SUPABASE_SECRET_KEY está usando uma chave pública. Troque por uma chave sb_secret_.';
       setBackendStatus('error', message);
       throw new Error(message);
@@ -4505,57 +4582,108 @@ window.APP_CONFIG = Object.freeze({
     return message.includes('unrecognized jwt kid')
       || message.includes('token is unverifiable')
       || message.includes('unable to parse or verify signature')
-      || message.includes('invalid jwt');
+      || message.includes('invalid jwt')
+      || message.includes('jwt expired');
+  }
+
+  function decodeJwtPayload(token = '') {
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) return {};
+      const normalized = payload
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+        .padEnd(Math.ceil(payload.length / 4) * 4, '=');
+      return JSON.parse(atob(normalized));
+    } catch {
+      return {};
+    }
   }
 
   async function getAccessToken({ refresh = false } = {}) {
     const client = getClient();
-    if (!client) throw new Error('Cliente do Supabase indisponível. Recarregue a página.');
+    if (!client) {
+      const error = new Error('Cliente do Supabase indisponível. Recarregue a página.');
+      error.code = 'CLIENT_UNAVAILABLE';
+      throw error;
+    }
 
-    const result = refresh
+    let result = refresh
       ? await client.auth.refreshSession()
       : await client.auth.getSession();
 
     if (result.error) throw result.error;
-    const token = result.data?.session?.access_token;
-    if (!token) throw new Error('Sua sessão expirou. Entre novamente.');
+
+    let session = result.data?.session || null;
+    let token = session?.access_token || '';
+    if (!token) {
+      const error = new Error('Não existe uma sessão ativa para consultar os usuários.');
+      error.code = 'SESSION_REQUIRED';
+      throw error;
+    }
+
+    const claims = decodeJwtPayload(token);
+    const secondsRemaining = Number(claims.exp || 0) - Math.floor(Date.now() / 1000);
+
+    if (!refresh && secondsRemaining > 0 && secondsRemaining < 120) {
+      result = await client.auth.refreshSession(session);
+      if (result.error) throw result.error;
+      session = result.data?.session || null;
+      token = session?.access_token || '';
+    }
+
+    if (!token) {
+      const error = new Error('Não foi possível obter um token de acesso válido.');
+      error.code = 'SESSION_REQUIRED';
+      throw error;
+    }
+
     return token;
   }
 
   async function api(action, payload = {}, attempt = 0) {
-    const client = getClient();
     const token = await getAccessToken({ refresh: attempt > 0 });
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
       body: JSON.stringify({ action, payload }),
       cache: 'no-store'
     });
 
     let result = null;
-    try { result = await response.json(); } catch {}
+    try {
+      result = await response.json();
+    } catch {
+      result = null;
+    }
 
     if (!response.ok || !result?.ok) {
       const rawMessage = result?.message || `Falha na gestão de usuários (${response.status}).`;
       const code = String(result?.code || '');
 
-      if (attempt === 0 && (code === 'STALE_SESSION' || isSigningKeyError(rawMessage))) {
-        setBackendStatus('warning', 'A sessão foi renovada automaticamente. Tentando novamente…');
+      const canRefresh = response.status === 401
+        || code === 'STALE_SESSION'
+        || code === 'SESSION_EXPIRED'
+        || code === 'INVALID_SESSION'
+        || code === 'PROJECT_MISMATCH'
+        || isSigningKeyError(rawMessage);
+
+      if (attempt === 0 && canRefresh) {
+        setBackendStatus('warning', 'Renovando a credencial administrativa e tentando novamente…');
         return api(action, payload, 1);
       }
 
       const message = response.status === 404
         ? 'A função users-admin não foi encontrada no Cloudflare Pages.'
         : response.status === 401
-          ? 'Sua sessão de segurança expirou. Entre novamente no sistema.'
+          ? 'A função de usuários não conseguiu validar a credencial. A sessão principal foi mantida; clique em Atualizar para tentar novamente.'
           : rawMessage;
 
       setBackendStatus(response.status === 401 ? 'warning' : 'error', message);
-
-      if (response.status === 401 && client) {
-        window.setTimeout(() => client.auth.signOut(), 900);
-      }
 
       const error = new Error(message);
       error.code = code;

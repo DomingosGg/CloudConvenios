@@ -1,4 +1,4 @@
-const FUNCTION_VERSION = 'cloudflare-pages-1.2.0';
+const FUNCTION_VERSION = 'cloudflare-pages-1.3.0-session-stable';
 const ALLOWED_PROFILES = new Set(['administrador', 'operador']);
 
 const BASE_HEADERS = {
@@ -104,40 +104,80 @@ async function verifyAdministrator(request, config) {
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
   if (!token) {
-    throw Object.assign(new Error('Sessão não informada.'), { status: 401, code: 'SESSION_REQUIRED' });
-  }
-
-  let authUser;
-  try {
-    authUser = await supabaseRequest(
-      config,
-      '/auth/v1/user',
-      { method: 'GET' },
-      { userJwt: token, apiKey: config.supabasePublishableKey || config.supabaseSecretKey }
-    );
-  } catch (error) {
-    throw normalizeAuthError(error);
+    throw Object.assign(new Error('Sessão não informada.'), {
+      status: 401,
+      code: 'SESSION_REQUIRED'
+    });
   }
 
   const jwt = decodeJwtPayload(token);
-  if (jwt.aal && jwt.aal !== 'aal2') {
+  const expectedIssuer = `${config.supabaseUrl}/auth/v1`;
+
+  if (!jwt.sub) {
+    throw Object.assign(new Error('Token de acesso sem identificador de usuário.'), {
+      status: 401,
+      code: 'INVALID_SESSION'
+    });
+  }
+
+  if (jwt.iss && String(jwt.iss).replace(/\/$/, '') !== expectedIssuer) {
+    throw Object.assign(new Error('A sessão pertence a outro projeto do Supabase.'), {
+      status: 401,
+      code: 'PROJECT_MISMATCH'
+    });
+  }
+
+  if (Number(jwt.exp || 0) <= Math.floor(Date.now() / 1000)) {
+    throw Object.assign(new Error('O token de acesso expirou e precisa ser renovado.'), {
+      status: 401,
+      code: 'SESSION_EXPIRED'
+    });
+  }
+
+  if (jwt.aal !== 'aal2') {
     throw Object.assign(new Error('Confirme o código do aplicativo autenticador para continuar.'), {
       status: 403,
       code: 'MFA_REQUIRED'
     });
   }
 
-  const rows = await supabaseRequest(
-    config,
-    `/rest/v1/usuarios?id=eq.${encodeURIComponent(authUser.id)}&select=id,nome,email,perfil_id,ativo`,
-    { method: 'GET' }
-  );
+  let rows;
+  try {
+    /*
+     * O Data API/PostgREST do próprio projeto valida a assinatura do JWT
+     * (inclusive ES256) e aplica as políticas RLS usando o token do usuário.
+     * Isso evita depender do endpoint /auth/v1/user na borda.
+     */
+    rows = await supabaseRequest(
+      config,
+      `/rest/v1/usuarios?id=eq.${encodeURIComponent(jwt.sub)}&select=id,nome,email,perfil_id,ativo`,
+      { method: 'GET' },
+      { userJwt: token, apiKey: config.supabaseSecretKey }
+    );
+  } catch (error) {
+    throw normalizeAuthError(error);
+  }
 
   const profile = Array.isArray(rows) ? rows[0] : null;
 
-  if (!profile || profile.ativo !== true || profile.perfil_id !== 'administrador') {
-    throw Object.assign(new Error('Ação permitida somente ao administrador ativo.'), { status: 403 });
+  if (!profile) {
+    throw Object.assign(new Error('O perfil desta sessão não foi encontrado ou não está autorizado.'), {
+      status: 403,
+      code: 'PROFILE_NOT_AUTHORIZED'
+    });
   }
+
+  if (profile.ativo !== true || profile.perfil_id !== 'administrador') {
+    throw Object.assign(new Error('Ação permitida somente ao administrador ativo.'), {
+      status: 403,
+      code: 'ADMIN_REQUIRED'
+    });
+  }
+
+  const authUser = {
+    id: jwt.sub,
+    email: jwt.email || profile.email || null
+  };
 
   return { authUser, profile, token };
 }
@@ -526,7 +566,7 @@ function healthPayload(env) {
   const serverKeyType = describeServerKey(config.supabaseSecretKey);
   const validServerKey = ['secret_key', 'service_role_jwt'].includes(serverKeyType);
   return {
-    ready: Boolean(config.supabaseUrl && config.supabaseSecretKey && config.supabasePublishableKey && validServerKey),
+    ready: Boolean(config.supabaseUrl && config.supabaseSecretKey && validServerKey),
     platform: 'cloudflare-pages',
     version: FUNCTION_VERSION,
     supabaseUrlConfigured: Boolean(config.supabaseUrl),
