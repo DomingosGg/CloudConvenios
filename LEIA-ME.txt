@@ -1,0 +1,24 @@
+﻿CORRETOR AUTOMÁTICO — CLOUDCONVENIOS
+
+1. No GitHub Desktop, clique em "Show in Explorer".
+2. Copie estes três arquivos para dentro da pasta CloudConvenios aberta.
+3. Execute "CORRIGIR-ESTRUTURA.bat".
+4. Volte ao GitHub Desktop.
+5. Em Summary, escreva: Corrigir estrutura das Functions
+6. Clique em "Commit to main".
+7. Clique em "Push origin".
+8. Aguarde o Cloudflare publicar novamente.
+9. Teste:
+   https://cloudconvenios.pages.dev/api/health
+
+Resultado esperado no GitHub:
+functions/
+  api/
+    health.js
+    users-admin.js
+    cnpj-lookup.js
+
+Também devem aparecer:
+css/
+js/
+modelo/
