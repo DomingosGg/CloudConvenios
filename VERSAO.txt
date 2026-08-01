@@ -1,5 +1,1 @@
-<<<<<<< HEAD
-﻿8.4.6 - Importação controlável por CNPJ e rolagem horizontal do Kanban restaurada
-=======
-8.4.5 - Importação somente com CNPJ corrigida e consulta antes da validação
->>>>>>> baf3b31494f3b97583d4332ed14f5e3fa286d20a
+﻿8.4.7 - Kanban lateral somente por clique e arraste

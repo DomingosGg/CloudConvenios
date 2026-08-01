@@ -920,30 +920,18 @@
       }
     }
 
+    // V8.4.7: deslocamento lateral somente por clique e arraste.
+    // A roda do mouse mantém a rolagem vertical normal da página.
     function enableKanbanMouseScroll(scroller = document.querySelector('.kanban-wrap')) {
       if (!scroller || scroller.dataset.mouseScrollBound === 'true') return;
       scroller.dataset.mouseScrollBound = 'true';
-      scroller.tabIndex = 0;
-      scroller.setAttribute('aria-label', 'Quadro de renovações com rolagem horizontal');
+      scroller.setAttribute('aria-label', 'Quadro de renovações: clique e arraste uma área vazia para mover lateralmente');
       scroller.style.cursor = 'grab';
       scroller.style.overscrollBehaviorX = 'contain';
 
       scroller.addEventListener('scroll', () => {
         state.kanbanScrollLeft = scroller.scrollLeft;
       }, { passive: true });
-
-      scroller.addEventListener('wheel', (event) => {
-        if (scroller.scrollWidth <= scroller.clientWidth) return;
-        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-          ? event.deltaX
-          : event.deltaY;
-        if (!delta) return;
-        const maximum = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-        const next = Math.max(0, Math.min(maximum, scroller.scrollLeft + delta));
-        if (next === scroller.scrollLeft) return;
-        event.preventDefault();
-        scroller.scrollLeft = next;
-      }, { passive: false });
 
       let dragging = false;
       let startX = 0;
@@ -985,14 +973,6 @@
       scroller.addEventListener('pointercancel', stopDragging);
       scroller.addEventListener('lostpointercapture', stopDragging);
 
-      scroller.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        scroller.scrollBy({
-          left: event.key === 'ArrowRight' ? 320 : -320,
-          behavior: 'smooth'
-        });
-      });
     }
 
     function renderAlerts() {
