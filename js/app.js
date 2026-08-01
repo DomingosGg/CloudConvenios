@@ -95,6 +95,8 @@
       importErrors: [],
       importFileName: '',
       importRunning: false,
+      importPreparing: false,
+      importPreparationToken: 0,
       cnpjTimer: null,
       cnpjRequestId: 0,
       cnpjApplying: false,
@@ -911,53 +913,86 @@
       $$('.kanban-column').forEach(col=>{col.addEventListener('dragover',e=>{if(!canEdit())return;e.preventDefault();col.classList.add('drag-over');});col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drag-over');if(!canEdit()){toast('error','Acesso restrito','Seu perfil não pode movimentar o Kanban.');return;}const id=e.dataTransfer.getData('text/plain');const c=state.data.concedentes.find(x=>x.id===id);if(c&&c.situacao!==col.dataset.stage){const previous=c.situacao;c.situacao=col.dataset.stage;renderAll();applyAccessRules();try{await window.remoteData.updateCompanyStatus(id,col.dataset.stage,c.formasContato);toast('success','Etapa atualizada',`O cartão foi movido para “${col.dataset.stage}”.`);}catch(error){c.situacao=previous;renderAll();applyAccessRules();toast('error','Falha ao mover cartão',error.message||'Não foi possível atualizar a etapa.');}}});});
       $$('[data-kanban-contact]').forEach(b=>b.onclick=e=>{e.stopPropagation();openContactForm(b.dataset.kanbanContact);});
       const board = $('#kanbanBoard');
-      if (board) {
-        board.scrollLeft = state.kanbanScrollLeft || 0;
-        enableKanbanMouseScroll(board);
+      const scroller = board?.closest('.kanban-wrap');
+      if (scroller) {
+        scroller.scrollLeft = state.kanbanScrollLeft || 0;
+        enableKanbanMouseScroll(scroller);
       }
     }
 
-    function enableKanbanMouseScroll(board = $('#kanbanBoard')) {
-      if (!board || board.dataset.mouseScrollBound === 'true') return;
-      board.dataset.mouseScrollBound = 'true';
+    function enableKanbanMouseScroll(scroller = document.querySelector('.kanban-wrap')) {
+      if (!scroller || scroller.dataset.mouseScrollBound === 'true') return;
+      scroller.dataset.mouseScrollBound = 'true';
+      scroller.tabIndex = 0;
+      scroller.setAttribute('aria-label', 'Quadro de renovações com rolagem horizontal');
+      scroller.style.cursor = 'grab';
+      scroller.style.overscrollBehaviorX = 'contain';
 
-      board.addEventListener('scroll', () => {
-        state.kanbanScrollLeft = board.scrollLeft;
+      scroller.addEventListener('scroll', () => {
+        state.kanbanScrollLeft = scroller.scrollLeft;
       }, { passive: true });
 
-      board.addEventListener('wheel', (event) => {
-        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-        if (board.scrollWidth <= board.clientWidth) return;
+      scroller.addEventListener('wheel', (event) => {
+        if (scroller.scrollWidth <= scroller.clientWidth) return;
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.deltaY;
+        if (!delta) return;
+        const maximum = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+        const next = Math.max(0, Math.min(maximum, scroller.scrollLeft + delta));
+        if (next === scroller.scrollLeft) return;
         event.preventDefault();
-        board.scrollLeft += event.deltaY;
+        scroller.scrollLeft = next;
       }, { passive: false });
 
       let dragging = false;
       let startX = 0;
       let startScroll = 0;
+      let activePointerId = null;
 
-      board.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0 || event.target.closest('button, input, select, textarea, a, .kanban-card')) return;
+      scroller.addEventListener('pointerdown', (event) => {
+        if (
+          event.button !== 0
+          || event.target.closest('button, input, select, textarea, a, .kanban-card')
+        ) return;
         dragging = true;
+        activePointerId = event.pointerId;
         startX = event.clientX;
-        startScroll = board.scrollLeft;
-        board.classList.add('mouse-dragging');
-        board.setPointerCapture?.(event.pointerId);
+        startScroll = scroller.scrollLeft;
+        scroller.style.cursor = 'grabbing';
+        scroller.style.userSelect = 'none';
+        scroller.setPointerCapture?.(event.pointerId);
       });
 
-      board.addEventListener('pointermove', (event) => {
-        if (!dragging) return;
-        board.scrollLeft = startScroll - (event.clientX - startX);
+      scroller.addEventListener('pointermove', (event) => {
+        if (!dragging || event.pointerId !== activePointerId) return;
+        event.preventDefault();
+        scroller.scrollLeft = startScroll - (event.clientX - startX);
       });
 
-      const stopDragging = (event) => {
+      const stopDragging = () => {
         if (!dragging) return;
         dragging = false;
-        board.classList.remove('mouse-dragging');
-        if (event?.pointerId !== undefined) board.releasePointerCapture?.(event.pointerId);
+        scroller.style.cursor = 'grab';
+        scroller.style.userSelect = '';
+        if (activePointerId !== null) {
+          try { scroller.releasePointerCapture?.(activePointerId); } catch {}
+        }
+        activePointerId = null;
       };
-      board.addEventListener('pointerup', stopDragging);
-      board.addEventListener('pointercancel', stopDragging);
+
+      scroller.addEventListener('pointerup', stopDragging);
+      scroller.addEventListener('pointercancel', stopDragging);
+      scroller.addEventListener('lostpointercapture', stopDragging);
+
+      scroller.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        scroller.scrollBy({
+          left: event.key === 'ArrowRight' ? 320 : -320,
+          behavior: 'smooth'
+        });
+      });
     }
 
     function renderAlerts() {
@@ -1379,15 +1414,43 @@
           demo: false
         });
         if (!company.nomeFantasia && company.razaoSocial) company.nomeFantasia = company.razaoSocial;
-        return { rowNumber: rowIndex + 2, company, original: row, issues: [], warnings: [], duplicate: null };
+        return {
+          rowNumber: rowIndex + 2,
+          company,
+          sourceCompany: normalizeCompany(company),
+          original: row,
+          issues: [],
+          warnings: [],
+          duplicate: null,
+          enrichmentAttempted: false,
+          enrichmentEnabled: null,
+          lookupError: '',
+          processing: false,
+          defaultedPolo: false
+        };
       });
+    }
+
+    function importEnrichmentEnabled() {
+      const toggle = $('#importEnrichCnpj');
+      return toggle ? Boolean(toggle.checked) : true;
+    }
+
+    function applyImportDefaults(company, entry) {
+      const result = normalizeCompany(company);
+      if (!result.nomeFantasia && result.razaoSocial) result.nomeFantasia = result.razaoSocial;
+      if (!String(result.polo || '').trim()) {
+        result.polo = 'Não informado';
+        if (entry) entry.defaultedPolo = true;
+      }
+      return normalizeCompany(result);
     }
 
     function assessImportEntry(entry) {
       const company = entry.company;
       const issues = [];
       const warnings = [];
-      const enrich = true;
+      const enrich = importEnrichmentEnabled();
       const validCnpj = !company.cnpj || cnpjValidLength(company.cnpj);
       const existing = company.cnpj
         ? state.data.concedentes.find((item) => cnpjKey(item.cnpj) === cnpjKey(company.cnpj)) || null
@@ -1396,17 +1459,42 @@
 
       if (company.cnpj && !validCnpj) issues.push('CNPJ deve ter 14 caracteres');
       if (!company.cnpj && !company.razaoSocial) issues.push('Informe CNPJ ou Razão Social');
-      if (!company.polo) issues.push('Polo não informado');
       if (company.estado && company.estado.length !== 2) issues.push('UF inválida');
       if (company.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(company.email)) issues.push('E-mail inválido');
-      if (company.inicioVigencia && company.fimVigencia && company.fimVigencia < company.inicioVigencia) issues.push('Fim da vigência anterior ao início');
+      if (company.inicioVigencia && company.fimVigencia && company.fimVigencia < company.inicioVigencia) {
+        issues.push('Fim da vigência anterior ao início');
+      }
       if (company.situacao && !situacoesContato.includes(company.situacao)) warnings.push('Situação não padronizada');
 
-      const apiCanComplete = enrich && company.cnpj && validCnpj;
-      if (!company.razaoSocial) (apiCanComplete ? warnings : issues).push('Razão Social ausente');
-      if (!company.nomeFantasia && !company.razaoSocial) (apiCanComplete ? warnings : issues).push('Nome Fantasia ausente');
-      if (!company.cidade) (apiCanComplete ? warnings : issues).push('Cidade ausente');
-      if (!company.estado) (apiCanComplete ? warnings : issues).push('Estado ausente');
+      const pendingLookup = Boolean(
+        enrich
+        && company.cnpj
+        && validCnpj
+        && window.cnpjService
+        && !entry.enrichmentAttempted
+      );
+
+      [
+        ['razaoSocial', 'Razão Social ausente'],
+        ['nomeFantasia', 'Nome Fantasia ausente'],
+        ['cidade', 'Cidade ausente'],
+        ['estado', 'Estado ausente']
+      ].forEach(([field, message]) => {
+        if (String(company[field] || '').trim()) return;
+        (pendingLookup ? warnings : issues).push(
+          pendingLookup ? `${message} — será consultada pelo CNPJ` : message
+        );
+      });
+
+      if (!company.cnaePrincipal) {
+        warnings.push(
+          pendingLookup
+            ? 'CNAE será consultado pelo CNPJ'
+            : 'CNAE não informado ou não localizado nas fontes públicas'
+        );
+      }
+      if (entry.defaultedPolo) warnings.push('Polo preenchido automaticamente como “Não informado”');
+      if (entry.lookupError) warnings.push(`Consulta CNPJ: ${entry.lookupError}`);
       if (existing) warnings.push('CNPJ já cadastrado');
 
       entry.issues = [...new Set(issues)];
@@ -1415,28 +1503,36 @@
     }
 
     function renderImportPreview() {
-      state.importRows.forEach(assessImportEntry);
+      state.importRows.forEach((entry) => assessImportEntry(entry));
       const valid = state.importRows.filter((entry) => !entry.issues.length && !entry.warnings.length).length;
       const warnings = state.importRows.filter((entry) => !entry.issues.length && entry.warnings.length).length;
       const errors = state.importRows.filter((entry) => entry.issues.length).length;
       const duplicates = state.importRows.filter((entry) => entry.duplicate).length;
       const total = state.importRows.length;
-
       const summary = $('#importSummary');
       if (summary) summary.innerHTML = [
         ['Total', total, ''], ['Prontas', valid, 'is-valid'], ['Com avisos', warnings, 'is-warning'], ['Com erros', errors, 'is-error'], ['Duplicadas', duplicates, 'is-warning']
       ].map(([label, value, className]) => `<div class="import-summary-card ${className}"><strong>${value}</strong><span>${label}</span></div>`).join('');
-
       const preview = $('#importPreview');
       if (preview) preview.innerHTML = total ? `<table><thead><tr><th>Linha</th><th>Status</th><th>CNPJ</th><th>Razão Social</th><th>Nome Fantasia</th><th>UF</th><th>Cidade</th><th>Polo</th><th>Vigência final</th><th>Observações da validação</th></tr></thead><tbody>${state.importRows.slice(0, 100).map((entry) => {
-        const status = entry.issues.length ? ['error', 'Erro'] : entry.warnings.length ? ['warning', 'Revisar'] : ['valid', 'Pronta'];
-        const notes = [...entry.issues, ...entry.warnings].join(' • ') || 'Linha validada';
+        const status = entry.processing
+          ? ['warning', 'Consultando']
+          : entry.issues.length
+            ? ['error', 'Erro']
+            : entry.warnings.length
+              ? ['warning', 'Revisar']
+              : ['valid', 'Pronta'];
+        const notes = entry.processing
+          ? 'Consultando dados públicos do CNPJ…'
+          : [...entry.issues, ...entry.warnings].join(' • ') || 'Linha validada';
         const company = entry.company;
         return `<tr><td>${entry.rowNumber}</td><td><span class="import-row-status ${status[0]}">${status[1]}</span></td><td>${escapeHTML(company.cnpj || '—')}</td><td>${escapeHTML(company.razaoSocial || '—')}</td><td>${escapeHTML(company.nomeFantasia || '—')}</td><td>${escapeHTML(company.estado || '—')}</td><td>${escapeHTML(company.cidade || '—')}</td><td>${escapeHTML(company.polo || '—')}</td><td>${formatDate(company.fimVigencia)}</td><td>${escapeHTML(notes)}</td></tr>`;
       }).join('')}</tbody></table>${total > 100 ? `<div class="summary-box">A prévia mostra as primeiras 100 linhas de ${total}.</div>` : ''}` : '<div class="empty-state"><i class="fa-solid fa-table"></i><strong>Nenhuma linha identificada</strong><span>Confira a planilha ou use o modelo recomendado.</span></div>';
-
       const confirm = $('#confirmImport');
-      if (confirm) confirm.disabled = !total || state.importRunning;
+      if (confirm) {
+        const hasImportableRows = state.importRows.some((entry) => !entry.issues.length);
+        confirm.disabled = !hasImportableRows || state.importRunning || state.importPreparing;
+      }
     }
 
     async function readSpreadsheetRows(file) {
@@ -1450,26 +1546,181 @@
       return window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
     }
 
+    function waitImportLookup(milliseconds) {
+      return new Promise((resolve) => setTimeout(resolve, milliseconds));
+    }
+
+    function shouldRetryCnpjLookup(error) {
+      const status = Number(error?.status || 0);
+      const message = String(error?.message || '').toLowerCase();
+      return [408, 425, 429, 500, 502, 503, 504].includes(status)
+        || message.includes('temporariamente')
+        || message.includes('timeout')
+        || message.includes('network')
+        || message.includes('fetch')
+        || message.includes('limite');
+    }
+
+    async function lookupCnpjForImport(cnpj, attempts = 3) {
+      let lastError = null;
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+          return await window.cnpjService.lookup(cnpj);
+        } catch (error) {
+          lastError = error;
+          if (attempt >= attempts || !shouldRetryCnpjLookup(error)) break;
+          await waitImportLookup(900 * attempt);
+        }
+      }
+      throw lastError || new Error('Não foi possível consultar o CNPJ.');
+    }
+
+    async function enrichImportEntry(entry, { retry = false } = {}) {
+      const enrich = importEnrichmentEnabled();
+      let company = normalizeCompany(entry.company);
+      entry.lookupError = '';
+
+      const validCnpj = Boolean(company.cnpj && cnpjValidLength(company.cnpj));
+      const missingPublicData = CNPJ_FILL_FIELDS.some(
+        (field) => !String(company[field] || '').trim()
+      );
+
+      if (
+        enrich
+        && validCnpj
+        && missingPublicData
+        && window.cnpjService
+        && (!entry.enrichmentAttempted || retry || entry.enrichmentEnabled !== enrich)
+      ) {
+        try {
+          const lookup = await lookupCnpjForImport(company.cnpj);
+          company = mergeCnpjData(company, lookup.data || {});
+        } catch (error) {
+          entry.lookupError = error?.message || 'Consulta indisponível';
+        }
+      }
+
+      entry.enrichmentAttempted = true;
+      entry.enrichmentEnabled = enrich;
+      entry.company = applyImportDefaults(company, entry);
+      assessImportEntry(entry);
+      return entry;
+    }
+
+    async function prepareImportRows({ reset = false } = {}) {
+      if (!state.importRows.length) {
+        renderImportPreview();
+        return;
+      }
+
+      const token = ++state.importPreparationToken;
+      const enrich = importEnrichmentEnabled();
+      state.importPreparing = true;
+
+      if (reset) {
+        state.importRows.forEach((entry) => {
+          entry.company = normalizeCompany(entry.sourceCompany || entry.company);
+          entry.enrichmentAttempted = false;
+          entry.enrichmentEnabled = null;
+          entry.lookupError = '';
+          entry.processing = false;
+          entry.defaultedPolo = false;
+        });
+      }
+
+      updateImportProgress(
+        0,
+        state.importRows.length,
+        enrich
+          ? `Consultando ${state.importRows.length} CNPJ(s)…`
+          : 'Complementação automática desativada. Validando a planilha…'
+      );
+
+      try {
+        for (let index = 0; index < state.importRows.length; index += 1) {
+          if (token !== state.importPreparationToken) return;
+          const entry = state.importRows[index];
+          entry.processing = true;
+          renderImportPreview();
+
+          updateImportProgress(
+            index,
+            state.importRows.length,
+            enrich
+              ? `Consultando CNPJ da linha ${entry.rowNumber} — ${index + 1} de ${state.importRows.length}…`
+              : `Validando linha ${entry.rowNumber} — ${index + 1} de ${state.importRows.length}…`
+          );
+
+          await enrichImportEntry(entry);
+          entry.processing = false;
+          renderImportPreview();
+
+          updateImportProgress(
+            index + 1,
+            state.importRows.length,
+            `${index + 1} de ${state.importRows.length} linha(s) preparada(s).`
+          );
+
+          if (enrich && index < state.importRows.length - 1) await waitImportLookup(650);
+        }
+      } finally {
+        if (token === state.importPreparationToken) {
+          state.importPreparing = false;
+          renderImportPreview();
+        }
+      }
+    }
+
     async function handleSpreadsheetFile(file) {
-      if (!ensureAdmin('importar planilhas')) return;
+      if (!ensureAdmin('importar planilhas') || state.importPreparing || state.importRunning) return;
       const fileName = $('#importFileName');
       if (fileName) fileName.textContent = file.name;
       state.importFileName = file.name;
       state.importRows = [];
       state.importErrors = [];
+      state.importPreparationToken += 1;
       $('#downloadImportErrors')?.classList.add('hidden');
-      $('#confirmImport').disabled = true;
-      $('#importSummary').innerHTML = '<div class="summary-box"><i class="fa-solid fa-spinner fa-spin"></i> Lendo e validando a planilha…</div>';
+      if ($('#confirmImport')) $('#confirmImport').disabled = true;
+      if ($('#importSummary')) $('#importSummary').innerHTML = '<div class="summary-box"><i class="fa-solid fa-spinner fa-spin"></i> Lendo a planilha…</div>';
       try {
         const rows = await readSpreadsheetRows(file);
         state.importRows = mapImportedRows(rows);
         if (!state.importRows.length) throw new Error('Nenhuma linha de dados foi identificada.');
         renderImportPreview();
+        await prepareImportRows({ reset: true });
+        const ready = state.importRows.filter((entry) => !entry.issues.length).length;
+        const errors = state.importRows.length - ready;
+        toast(
+          errors ? 'warning' : 'success',
+          'Planilha preparada',
+          `${ready} linha(s) pronta(s) e ${errors} linha(s) que precisam de revisão.`
+        );
       } catch (error) {
-        console.error('[Importação] Falha na leitura:', error);
+        console.error('[Importação] Falha na preparação:', error);
         state.importRows = [];
+        state.importPreparing = false;
         renderImportPreview();
         toast('error', 'Planilha inválida', error.message || 'Não foi possível interpretar o arquivo.');
+      }
+    }
+
+    async function reprocessImportRowsForEnrichment() {
+      if (state.importRunning) return;
+      if (!state.importRows.length) {
+        renderImportPreview();
+        return;
+      }
+      try {
+        await prepareImportRows({ reset: true });
+        toast(
+          'info',
+          importEnrichmentEnabled() ? 'Complementação ativada' : 'Complementação desativada',
+          importEnrichmentEnabled()
+            ? 'Os campos vazios foram consultados novamente pelo CNPJ.'
+            : 'A prévia foi restaurada com os dados originais da planilha.'
+        );
+      } catch (error) {
+        toast('error', 'Falha ao preparar a planilha', error.message || 'Não foi possível reprocessar as linhas.');
       }
     }
 
@@ -1523,9 +1774,9 @@
     }
 
     async function confirmImport() {
-      if (!ensureAdmin('importar planilhas') || state.importRunning || !state.importRows.length) return;
+      if (!ensureAdmin('importar planilhas') || state.importRunning || state.importPreparing || !state.importRows.length) return;
       const strategy = $('#duplicateStrategy').value;
-      const enrich = true;
+      const enrich = importEnrichmentEnabled();
       const button = $('#confirmImport');
       state.importRunning = true;
       state.importErrors = [];
@@ -1533,38 +1784,42 @@
       let updated = 0;
       let skipped = 0;
       let rejected = 0;
-      if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Importando…'; }
-
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Importando…';
+      }
       try {
+        const modeChanged = state.importRows.some((entry) => entry.enrichmentEnabled !== enrich);
+        if (modeChanged) await prepareImportRows({ reset: true });
+
         for (let index = 0; index < state.importRows.length; index += 1) {
           const entry = state.importRows[index];
           let company = normalizeCompany(entry.company);
-          updateImportProgress(index, state.importRows.length, `Processando linha ${entry.rowNumber} de ${state.importRows.length + 1}…`);
-
+          updateImportProgress(
+            index,
+            state.importRows.length,
+            `Importando linha ${entry.rowNumber} — ${index + 1} de ${state.importRows.length}…`
+          );
           try {
-            if (enrich && company.cnpj && cnpjValidLength(company.cnpj) && window.cnpjService) {
-              const missing = CNPJ_FILL_FIELDS.some((field) => !String(company[field] || '').trim());
-              if (missing) {
-                try {
-                  const lookup = await window.cnpjService.lookup(company.cnpj);
-                  company = mergeCnpjData(company, lookup.data || {});
-                } catch (lookupError) {
-                  entry.warnings.push(`Consulta CNPJ: ${lookupError.message}`);
-                }
-                if (index < state.importRows.length - 1) await new Promise((resolve) => setTimeout(resolve, 700));
-              }
+            if (enrich && entry.lookupError && company.cnpj && cnpjValidLength(company.cnpj)) {
+              await enrichImportEntry(entry, { retry: true });
+              company = normalizeCompany(entry.company);
+            } else {
+              company = applyImportDefaults(company, entry);
+              entry.company = company;
+              assessImportEntry(entry);
             }
 
-            if (!company.nomeFantasia && company.razaoSocial) company.nomeFantasia = company.razaoSocial;
-            entry.company = company;
-            assessImportEntry(entry);
+            renderImportPreview();
             if (entry.issues.length) throw new Error(entry.issues.join('; '));
 
             const existing = company.cnpj
               ? state.data.concedentes.find((item) => cnpjKey(item.cnpj) === cnpjKey(company.cnpj))
               : null;
-            if (existing && strategy === 'ignore') { skipped += 1; continue; }
-
+            if (existing && strategy === 'ignore') {
+              skipped += 1;
+              continue;
+            }
             if (existing) {
               const merged = mergeDuplicate(existing, company, strategy);
               const saved = normalizeCompany(await window.remoteData.updateCompany(merged));
@@ -1579,15 +1834,27 @@
             }
           } catch (error) {
             rejected += 1;
-            state.importErrors.push({ linha: entry.rowNumber, cnpj: company.cnpj || '', nome: company.nomeFantasia || company.razaoSocial || '', erro: error.message || 'Falha desconhecida' });
+            state.importErrors.push({
+              linha: entry.rowNumber,
+              cnpj: company.cnpj || '',
+              nome: company.nomeFantasia || company.razaoSocial || '',
+              erro: error.message || 'Falha desconhecida'
+            });
           }
-          updateImportProgress(index + 1, state.importRows.length, `${index + 1} de ${state.importRows.length} linha(s) processada(s).`);
+          updateImportProgress(
+            index + 1,
+            state.importRows.length,
+            `${index + 1} de ${state.importRows.length} linha(s) processada(s).`
+          );
         }
-
         renderAll();
         applyAccessRules();
         $('#downloadImportErrors')?.classList.toggle('hidden', !state.importErrors.length);
-        toast(state.importErrors.length ? 'warning' : 'success', 'Importação concluída', `${imported} novo(s), ${updated} atualizado(s), ${skipped} ignorado(s) e ${rejected} rejeitado(s).`);
+        toast(
+          state.importErrors.length ? 'warning' : 'success',
+          'Importação concluída',
+          `${imported} novo(s), ${updated} atualizado(s), ${skipped} ignorado(s) e ${rejected} rejeitado(s).`
+        );
         if (!state.importErrors.length) closeModal('importModalBackdrop');
         state.importRows = [];
       } catch (error) {
@@ -1596,19 +1863,12 @@
         await loadRemoteData({ silent: true });
       } finally {
         state.importRunning = false;
-        if (button) { button.disabled = !state.importRows.length; button.innerHTML = '<i class="fa-solid fa-file-import"></i>Confirmar importação'; }
+        if (button) {
+          button.disabled = !state.importRows.some((entry) => !entry.issues.length);
+          button.innerHTML = '<i class="fa-solid fa-file-import"></i>Confirmar importação';
+        }
       }
     }
-
-    function downloadImportErrors() {
-      if (!state.importErrors.length) return;
-      const headers = ['Linha','CNPJ','Concedente','Erro'];
-      const rows = state.importErrors.map((error) => [error.linha, error.cnpj, error.nome, error.erro]);
-      const csv = '\uFEFF' + [headers, ...rows].map((row) => row.map(csvEscape).join(';')).join('\r\n');
-      downloadBlob(csv, 'text/csv;charset=utf-8;', `erros_importacao_${new Date().toLocaleDateString('pt-BR').replaceAll('/', '-')}.csv`);
-    }
-
-
 
     function setClearAllPasswordError(message = '') {
       const holder = $('#clearAllPasswordError');
@@ -1802,7 +2062,7 @@
       $$('.export-option').forEach(b=>b.onclick=()=>b.dataset.export==='contacts'?exportContacts():exportCompanies(b.dataset.export));
       $('#importBtn').onclick=()=>{
         if(!ensureAdmin('importar planilhas'))return;
-        state.importRows=[];state.importErrors=[];state.importFileName='';
+        state.importRows=[];state.importErrors=[];state.importFileName='';state.importPreparing=false;state.importPreparationToken+=1;
         $('#importFileName').textContent='Nenhum arquivo selecionado.';
         $('#importSummary').innerHTML='<div class="summary-box">Selecione uma planilha para iniciar a validação.</div>';
         $('#importPreview').innerHTML='<div class="empty-state"><i class="fa-solid fa-table"></i><strong>Nenhuma prévia disponível</strong><span>Use o modelo recomendado ou selecione sua planilha atual.</span></div>';
@@ -1814,7 +2074,7 @@
       $('#csvFileInput').onchange=e=>{if(e.target.files[0])handleSpreadsheetFile(e.target.files[0]);e.target.value='';};
       $('#downloadImportTemplate').onclick=downloadImportTemplate;
       $('#duplicateStrategy').onchange=renderImportPreview;
-      $('#importEnrichCnpj')?.addEventListener('change', renderImportPreview);
+      $('#importEnrichCnpj')?.addEventListener('change', reprocessImportRowsForEnrichment);
       $('#downloadImportErrors').onclick=downloadImportErrors;
       $('#confirmImport').onclick=confirmImport;
       $('#exportReports').onclick=exportReportCSV; $('#printReports').onclick=()=>window.print();

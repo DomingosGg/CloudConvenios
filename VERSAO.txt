@@ -1,1 +1,1 @@
-﻿8.4.4 - Remoção da demonstração, exclusão protegida por senha e importação automática pelo CNPJ
+﻿8.4.6 - Importação controlável por CNPJ e rolagem horizontal do Kanban restaurada
