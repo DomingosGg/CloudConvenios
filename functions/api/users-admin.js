@@ -1,4 +1,4 @@
-const FUNCTION_VERSION = 'cloudflare-pages-1.0.0';
+const FUNCTION_VERSION = 'cloudflare-pages-1.2.0';
 const ALLOWED_PROFILES = new Set(['administrador', 'operador']);
 
 const BASE_HEADERS = {
@@ -18,7 +18,8 @@ function json(status, body, extraHeaders = {}) {
 function getConfig(env) {
   return {
     supabaseUrl: String(env.SUPABASE_URL || '').replace(/\/$/, ''),
-    supabaseSecretKey: String(env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '')
+    supabaseSecretKey: String(env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || ''),
+    supabasePublishableKey: String(env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || '')
   };
 }
 
@@ -30,9 +31,10 @@ function normalizeEmail(value) {
   return cleanText(value, 254).toLowerCase();
 }
 
-async function supabaseRequest(config, path, options = {}, { userJwt = null } = {}) {
+async function supabaseRequest(config, path, options = {}, { userJwt = null, apiKey = null } = {}) {
+  const effectiveApiKey = apiKey || config.supabaseSecretKey;
   const headers = {
-    apikey: config.supabaseSecretKey,
+    apikey: effectiveApiKey,
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
@@ -62,6 +64,7 @@ async function supabaseRequest(config, path, options = {}, { userJwt = null } = 
     const message = data?.msg || data?.message || data?.error_description || data?.error || `Erro HTTP ${response.status}`;
     const error = new Error(message);
     error.status = response.status;
+    error.code = data?.code || data?.error_code || null;
     error.details = data;
     throw error;
   }
@@ -69,20 +72,60 @@ async function supabaseRequest(config, path, options = {}, { userJwt = null } = 
   return data;
 }
 
+function decodeJwtPayload(token) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return {};
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    return JSON.parse(atob(normalized));
+  } catch {
+    return {};
+  }
+}
+
+function normalizeAuthError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  if (
+    message.includes('unrecognized jwt kid')
+    || message.includes('token is unverifiable')
+    || message.includes('unable to parse or verify signature')
+    || message.includes('invalid jwt')
+  ) {
+    return Object.assign(new Error('Sua sessão de segurança precisa ser renovada. Entre novamente no sistema.'), {
+      status: 401,
+      code: 'STALE_SESSION'
+    });
+  }
+  return error;
+}
+
 async function verifyAdministrator(request, config) {
   const authHeader = request.headers.get('Authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
   if (!token) {
-    throw Object.assign(new Error('Sessão não informada.'), { status: 401 });
+    throw Object.assign(new Error('Sessão não informada.'), { status: 401, code: 'SESSION_REQUIRED' });
   }
 
-  const authUser = await supabaseRequest(
-    config,
-    '/auth/v1/user',
-    { method: 'GET' },
-    { userJwt: token }
-  );
+  let authUser;
+  try {
+    authUser = await supabaseRequest(
+      config,
+      '/auth/v1/user',
+      { method: 'GET' },
+      { userJwt: token, apiKey: config.supabasePublishableKey || config.supabaseSecretKey }
+    );
+  } catch (error) {
+    throw normalizeAuthError(error);
+  }
+
+  const jwt = decodeJwtPayload(token);
+  if (jwt.aal && jwt.aal !== 'aal2') {
+    throw Object.assign(new Error('Confirme o código do aplicativo autenticador para continuar.'), {
+      status: 403,
+      code: 'MFA_REQUIRED'
+    });
+  }
 
   const rows = await supabaseRequest(
     config,
@@ -483,11 +526,12 @@ function healthPayload(env) {
   const serverKeyType = describeServerKey(config.supabaseSecretKey);
   const validServerKey = ['secret_key', 'service_role_jwt'].includes(serverKeyType);
   return {
-    ready: Boolean(config.supabaseUrl && config.supabaseSecretKey && validServerKey),
+    ready: Boolean(config.supabaseUrl && config.supabaseSecretKey && config.supabasePublishableKey && validServerKey),
     platform: 'cloudflare-pages',
     version: FUNCTION_VERSION,
     supabaseUrlConfigured: Boolean(config.supabaseUrl),
     serverKeyConfigured: Boolean(config.supabaseSecretKey),
+    publishableKeyConfigured: Boolean(config.supabasePublishableKey),
     serverKeyType
   };
 }
@@ -548,6 +592,7 @@ export async function onRequest(context) {
     console.error('[users-admin]', error.status || 500, error.message);
     return json(error.status || 500, {
       ok: false,
+      code: error.code || null,
       message: error.message || 'Não foi possível concluir a operação.'
     });
   }

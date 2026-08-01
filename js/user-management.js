@@ -104,6 +104,7 @@
       let message = 'A função foi publicada, mas as variáveis do Supabase não estão completas.';
       if (!health.supabaseUrlConfigured) message = 'Configure SUPABASE_URL em Settings → Variables and Secrets no Cloudflare Pages.';
       else if (!health.serverKeyConfigured) message = 'Configure SUPABASE_SECRET_KEY como segredo no Cloudflare Pages e faça um novo deploy.';
+      else if (!health.publishableKeyConfigured) message = 'Configure SUPABASE_PUBLISHABLE_KEY no Cloudflare Pages e faça um novo deploy.';
       else if (health.serverKeyType === 'publishable_incorreta') message = 'SUPABASE_SECRET_KEY está usando uma chave pública. Troque por uma chave sb_secret_.';
       setBackendStatus('error', message);
       throw new Error(message);
@@ -112,13 +113,31 @@
     return health;
   }
 
-  async function api(action, payload = {}) {
+  function isSigningKeyError(value = '') {
+    const message = String(value || '').toLowerCase();
+    return message.includes('unrecognized jwt kid')
+      || message.includes('token is unverifiable')
+      || message.includes('unable to parse or verify signature')
+      || message.includes('invalid jwt');
+  }
+
+  async function getAccessToken({ refresh = false } = {}) {
     const client = getClient();
     if (!client) throw new Error('Cliente do Supabase indisponível. Recarregue a página.');
-    const { data, error } = await client.auth.getSession();
-    if (error) throw error;
-    const token = data.session?.access_token;
+
+    const result = refresh
+      ? await client.auth.refreshSession()
+      : await client.auth.getSession();
+
+    if (result.error) throw result.error;
+    const token = result.data?.session?.access_token;
     if (!token) throw new Error('Sua sessão expirou. Entre novamente.');
+    return token;
+  }
+
+  async function api(action, payload = {}, attempt = 0) {
+    const client = getClient();
+    const token = await getAccessToken({ refresh: attempt > 0 });
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -126,15 +145,37 @@
       body: JSON.stringify({ action, payload }),
       cache: 'no-store'
     });
+
     let result = null;
     try { result = await response.json(); } catch {}
+
     if (!response.ok || !result?.ok) {
+      const rawMessage = result?.message || `Falha na gestão de usuários (${response.status}).`;
+      const code = String(result?.code || '');
+
+      if (attempt === 0 && (code === 'STALE_SESSION' || isSigningKeyError(rawMessage))) {
+        setBackendStatus('warning', 'A sessão foi renovada automaticamente. Tentando novamente…');
+        return api(action, payload, 1);
+      }
+
       const message = response.status === 404
         ? 'A função users-admin não foi encontrada no Cloudflare Pages.'
-        : (result?.message || `Falha na gestão de usuários (${response.status}).`);
-      setBackendStatus('error', message);
-      throw new Error(message);
+        : response.status === 401
+          ? 'Sua sessão de segurança expirou. Entre novamente no sistema.'
+          : rawMessage;
+
+      setBackendStatus(response.status === 401 ? 'warning' : 'error', message);
+
+      if (response.status === 401 && client) {
+        window.setTimeout(() => client.auth.signOut(), 900);
+      }
+
+      const error = new Error(message);
+      error.code = code;
+      error.status = response.status;
+      throw error;
     }
+
     setBackendStatus('ok', `Função de usuários conectada — versão ${result.version || 'atual'}.`);
     return result.data;
   }

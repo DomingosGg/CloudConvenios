@@ -1,3 +1,12 @@
-v1.0-cloudflare-final
+v1.1-ajustes-cloudflare-v8
 Data: 2026-08-01
-Migração: Cloudflare Pages Functions, correção do diagnóstico users-admin e limpeza das instruções do Netlify.
+
+Melhorias:
+- Correção de JWT na gestão de usuários.
+- MFA obrigatório por aplicativo autenticador.
+- Edição de contatos.
+- Rolagem horizontal do Kanban pelo mouse.
+- Dias restantes na tabela de concedentes.
+- Exportações XLSX com histórico e armazenamento privado.
+- Novo modelo de importação.
+- Exportações automáticas diárias às 18:00.
