@@ -1,42 +1,28 @@
-﻿ALINHAR O CLOUDCONVENIOS AO SUPABASE CORRETO
+﻿CLOUDCONVENIOS V8.4.2 — REFRESH TOKEN
 
-Projeto de destino:
-https://uvsilamqohytjuzdjrok.supabase.co
+Esta correção:
+- remove sessões antigas ou inválidas do navegador;
+- não chama refreshSession manualmente na página de usuários;
+- evita concorrência na rotação do refresh token;
+- direciona o usuário ao login quando o token não existe mais;
+- preserva a URL e a chave pública atualmente configuradas no projeto;
+- não altera banco, SQL ou variáveis do Cloudflare.
 
-O instalador altera automaticamente:
-- index.html
-- js/supabase-config.js
-- VERSAO.txt
-- build-info.json
-- functions/api/health.js (apenas diagnóstico público da referência)
+COMO INSTALAR
+1. Extraia este ZIP.
+2. Abra o GitHub Desktop no repositório CloudConvenios.
+3. Execute CORRIGIR-REFRESH-TOKEN-V8.4.2.bat.
+4. Selecione a pasta aberta por Show in Explorer.
+5. Caso o envio automático não termine, faça:
+   - Summary: Corrigir refresh token V8.4.2
+   - Commit to main
+   - Push origin
+6. Aguarde o deploy verde no Cloudflare.
+7. Feche todas as abas do CloudConvenios.
+8. Abra o site e faça login novamente.
 
-Ele pedirá somente a PUBLISHABLE KEY.
-NÃO informe a Secret key ao instalador.
-
-COMO USAR
-1. No Supabase, abra o projeto uvsilamqohytjuzdjrok.
-2. Acesse Settings > API Keys.
-3. Copie a Publishable key.
-4. Abra o GitHub Desktop no repositório CloudConvenios.
-5. Execute ALINHAR-SITE-AO-SUPABASE.bat.
-6. Selecione a pasta aberta por Show in Explorer.
-7. Cole a Publishable key quando solicitado.
-8. Se o envio automático não ocorrer, faça Commit to main e Push origin.
-
-NO CLOUDFLARE
-Em Settings > Variables and Secrets > Production, confira:
-SUPABASE_URL=https://uvsilamqohytjuzdjrok.supabase.co
-SUPABASE_PUBLISHABLE_KEY=<chave pública do mesmo projeto>
-SUPABASE_SECRET_KEY=<chave secreta do mesmo projeto>
-
-A Secret key deve ficar somente no Cloudflare, marcada como Secret.
-
-Depois:
-- Faça Retry deployment.
-- Aguarde o deploy verde.
-- Abra o site em janela anônima.
-- Faça login novamente.
-
-Verificação:
-https://cloudconvenios.pages.dev/build-info.json
-https://cloudconvenios.pages.dev/api/health
+IMPORTANTE
+A tabela public.usuarios não é a lista de contas de autenticação.
+No Supabase:
+- clique no ícone de cadeado Authentication e abra Users; ou
+- no Table Editor, troque o schema public para auth e abra users.
