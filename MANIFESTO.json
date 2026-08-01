@@ -1,0 +1,23 @@
+{
+  "version": "8.4.1",
+  "target_project_ref": "uvsilamqohytjuzdjrok",
+  "target_url": "https://uvsilamqohytjuzdjrok.supabase.co",
+  "generated_at": "2026-08-01T17:12:07.055593+00:00",
+  "files": [
+    {
+      "file": "ALINHAR-SITE-AO-SUPABASE.bat",
+      "size": 132,
+      "sha256": "59821ab345a853afdf5e7e98a8d47c27729563c1292d79d74b0afeb4534f48a7"
+    },
+    {
+      "file": "ALINHAR-SITE-AO-SUPABASE.ps1",
+      "size": 9041,
+      "sha256": "2e38260d301b63414763f76119d85029ef751e975e7b27444ef102712a6266d4"
+    },
+    {
+      "file": "LEIA-ME.txt",
+      "size": 1299,
+      "sha256": "5e460055a95f71cc8363757db14fdcabdf35b590ff9d5404e760a5de2dd7dbcd"
+    }
+  ]
+}

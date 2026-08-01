@@ -1,0 +1,42 @@
+﻿ALINHAR O CLOUDCONVENIOS AO SUPABASE CORRETO
+
+Projeto de destino:
+https://uvsilamqohytjuzdjrok.supabase.co
+
+O instalador altera automaticamente:
+- index.html
+- js/supabase-config.js
+- VERSAO.txt
+- build-info.json
+- functions/api/health.js (apenas diagnóstico público da referência)
+
+Ele pedirá somente a PUBLISHABLE KEY.
+NÃO informe a Secret key ao instalador.
+
+COMO USAR
+1. No Supabase, abra o projeto uvsilamqohytjuzdjrok.
+2. Acesse Settings > API Keys.
+3. Copie a Publishable key.
+4. Abra o GitHub Desktop no repositório CloudConvenios.
+5. Execute ALINHAR-SITE-AO-SUPABASE.bat.
+6. Selecione a pasta aberta por Show in Explorer.
+7. Cole a Publishable key quando solicitado.
+8. Se o envio automático não ocorrer, faça Commit to main e Push origin.
+
+NO CLOUDFLARE
+Em Settings > Variables and Secrets > Production, confira:
+SUPABASE_URL=https://uvsilamqohytjuzdjrok.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<chave pública do mesmo projeto>
+SUPABASE_SECRET_KEY=<chave secreta do mesmo projeto>
+
+A Secret key deve ficar somente no Cloudflare, marcada como Secret.
+
+Depois:
+- Faça Retry deployment.
+- Aguarde o deploy verde.
+- Abra o site em janela anônima.
+- Faça login novamente.
+
+Verificação:
+https://cloudconvenios.pages.dev/build-info.json
+https://cloudconvenios.pages.dev/api/health
