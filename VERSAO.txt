@@ -1,1 +1,1 @@
-8.3.0 - Publicação integral dos ajustes, MFA TOTP e usuários JWT ES256
+8.4.0 - Correção da página de usuários e rolagem horizontal do Kanban

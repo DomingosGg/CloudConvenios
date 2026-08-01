@@ -1,4 +1,4 @@
-const FUNCTION_VERSION = 'cloudflare-pages-1.4.1-jwks-es256-v83';
+const FUNCTION_VERSION = 'cloudflare-pages-1.5.0-postgrest-jwks-v84';
 const ALLOWED_PROFILES = new Set(['administrador', 'operador']);
 
 const BASE_HEADERS = {
@@ -304,6 +304,58 @@ function validateJwtClaims(payload, config) {
   }
 }
 
+async function verifyUserTokenWithPostgrest(token, parsed, config) {
+  const apiKey = config.supabasePublishableKey || config.supabaseSecretKey;
+
+  try {
+    const rows = await supabaseRequest(
+      config,
+      `/rest/v1/usuarios?id=eq.${encodeURIComponent(parsed.payload.sub)}&select=id,nome,email,perfil_id,ativo`,
+      { method: 'GET' },
+      { userJwt: token, apiKey }
+    );
+
+    const profile = Array.isArray(rows) ? rows[0] : null;
+    if (!profile) {
+      throw Object.assign(
+        new Error('O perfil do usuário não foi encontrado ou não está liberado pelas políticas de acesso.'),
+        { status: 403, code: 'PROFILE_NOT_AVAILABLE' }
+      );
+    }
+
+    return profile;
+  } catch (error) {
+    const message = String(error?.message || '').toLowerCase();
+    const signingFailure = message.includes('jwt')
+      || message.includes('signature')
+      || message.includes('token')
+      || message.includes('kid');
+
+    if (!signingFailure) throw error;
+
+    // Em alguns projetos, o endpoint de autenticação pode demorar a reconhecer
+    // a nova chave ES256. Neste caso, validamos diretamente pelo JWKS oficial
+    // e consultamos o perfil com a credencial de servidor.
+    await verifyAsymmetricJwt(token, parsed, config);
+
+    const rows = await supabaseRequest(
+      config,
+      `/rest/v1/usuarios?id=eq.${encodeURIComponent(parsed.payload.sub)}&select=id,nome,email,perfil_id,ativo`,
+      { method: 'GET' }
+    );
+
+    const profile = Array.isArray(rows) ? rows[0] : null;
+    if (!profile) {
+      throw Object.assign(new Error('Perfil administrativo não encontrado.'), {
+        status: 403,
+        code: 'ADMIN_PROFILE_NOT_FOUND'
+      });
+    }
+
+    return profile;
+  }
+}
+
 async function verifyAdministrator(request, config) {
   const authHeader = request.headers.get('Authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
@@ -317,35 +369,62 @@ async function verifyAdministrator(request, config) {
 
   const parsed = parseJwt(token);
   const algorithm = String(parsed.header.alg || '');
-  let legacyUser = null;
+  const expectedIssuer = `${config.supabaseUrl}/auth/v1`;
+  const receivedIssuer = String(parsed.payload?.iss || '').replace(/\/$/, '');
 
-  if (algorithm === 'ES256' || algorithm === 'RS256') {
-    await verifyAsymmetricJwt(token, parsed, config);
-  } else if (algorithm === 'HS256') {
-    legacyUser = await verifyLegacyJwt(token, config);
-  } else {
+  if (receivedIssuer !== expectedIssuer) {
+    const expectedRef = (() => {
+      try { return new URL(config.supabaseUrl).hostname.split('.')[0]; } catch { return 'desconhecido'; }
+    })();
+    const receivedRef = (() => {
+      try { return new URL(receivedIssuer).hostname.split('.')[0]; } catch { return 'desconhecido'; }
+    })();
+
+    throw Object.assign(
+      new Error(
+        `O site e a função de usuários estão conectados a projetos Supabase diferentes. ` +
+        `Projeto do site: ${receivedRef}; projeto da função: ${expectedRef}.`
+      ),
+      {
+        status: 401,
+        code: 'PROJECT_MISMATCH',
+        details: { expectedRef, receivedRef }
+      }
+    );
+  }
+
+  if (!['ES256', 'RS256', 'HS256'].includes(algorithm)) {
     throw Object.assign(new Error(`Algoritmo de sessão não suportado: ${algorithm || 'ausente'}.`), {
       status: 401,
       code: 'UNSUPPORTED_JWT_ALGORITHM'
     });
   }
 
+  // Valida expiração, emissor, papel autenticado e MFA aal2.
   validateJwtClaims(parsed.payload, config);
 
-  if (legacyUser?.id && legacyUser.id !== parsed.payload.sub) {
-    throw Object.assign(new Error('A sessão validada não corresponde ao usuário informado.'), {
-      status: 401,
-      code: 'SESSION_USER_MISMATCH'
-    });
+  let profile;
+  if (algorithm === 'HS256') {
+    const legacyUser = await verifyLegacyJwt(token, config);
+    if (legacyUser?.id !== parsed.payload.sub) {
+      throw Object.assign(new Error('A sessão validada não corresponde ao usuário informado.'), {
+        status: 401,
+        code: 'SESSION_USER_MISMATCH'
+      });
+    }
+
+    const rows = await supabaseRequest(
+      config,
+      `/rest/v1/usuarios?id=eq.${encodeURIComponent(parsed.payload.sub)}&select=id,nome,email,perfil_id,ativo`,
+      { method: 'GET' }
+    );
+    profile = Array.isArray(rows) ? rows[0] : null;
+  } else {
+    // O PostgREST valida criptograficamente o JWT do usuário e aplica RLS.
+    // Se houver atraso na propagação da chave ES256, a função usa o JWKS oficial.
+    profile = await verifyUserTokenWithPostgrest(token, parsed, config);
   }
 
-  const rows = await supabaseRequest(
-    config,
-    `/rest/v1/usuarios?id=eq.${encodeURIComponent(parsed.payload.sub)}&select=id,nome,email,perfil_id,ativo`,
-    { method: 'GET' }
-  );
-
-  const profile = Array.isArray(rows) ? rows[0] : null;
   if (!profile || profile.ativo !== true || profile.perfil_id !== 'administrador') {
     throw Object.assign(new Error('Ação permitida somente ao administrador ativo.'), {
       status: 403,
@@ -353,12 +432,15 @@ async function verifyAdministrator(request, config) {
     });
   }
 
-  const authUser = {
-    id: parsed.payload.sub,
-    email: parsed.payload.email || profile.email || legacyUser?.email || null
+  return {
+    authUser: {
+      id: parsed.payload.sub,
+      email: parsed.payload.email || profile.email || null
+    },
+    profile,
+    token,
+    verification: algorithm === 'HS256' ? 'legacy-auth-user' : 'postgrest-jwt-with-jwks-fallback'
   };
-
-  return { authUser, profile, token, claims: parsed.payload };
 }
 
 async function listProfiles(config) {
@@ -752,7 +834,7 @@ function healthPayload(env) {
     serverKeyConfigured: Boolean(config.supabaseSecretKey),
     publishableKeyConfigured: Boolean(config.supabasePublishableKey),
     serverKeyType,
-    jwtVerification: 'jwks-es256-rs256'
+    jwtVerification: 'postgrest-jwt-with-jwks-fallback'
   };
 }
 

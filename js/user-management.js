@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const CLIENT_BUILD = '8.3.0-jwks';
+  const CLIENT_BUILD = '8.4.0-users-stable';
 
   const getClient = () => window.database?.client || null;
   const endpoint = '/api/users-admin';
@@ -216,9 +216,13 @@
 
       const message = response.status === 404
         ? 'A função users-admin não foi encontrada no Cloudflare Pages.'
-        : response.status === 401
-          ? 'A função de usuários não conseguiu validar a credencial. A sessão principal foi mantida; clique em Atualizar para tentar novamente.'
-          : rawMessage;
+        : code === 'PROJECT_MISMATCH'
+          ? rawMessage
+          : code === 'MFA_REQUIRED'
+            ? 'Confirme o código do aplicativo autenticador e tente novamente.'
+            : response.status === 401
+              ? `${rawMessage} A sessão principal foi mantida.`
+              : rawMessage;
 
       setBackendStatus(response.status === 401 ? 'warning' : 'error', message);
 

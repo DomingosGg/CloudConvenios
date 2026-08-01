@@ -1,13 +1,15 @@
 const RELEASE = Object.freeze({
-  version: '8.3.0',
+  version: '8.4.0',
   name: 'CloudConvenios',
   platform: 'cloudflare-pages',
   features: {
     usuarios_jwt_es256_jwks: true,
+    usuarios_postgrest_jwt_fallback: true,
     sessao_estavel: true,
     mfa_authenticator_totp: true,
     edicao_contatos: true,
     kanban_rolagem_mouse: true,
+    kanban_scroll_container_fix: true,
     dias_restantes_concedentes: true,
     historico_downloads: true,
     modelo_importacao_v8: true,

@@ -1386,3 +1386,23 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   .mfa-enrollment-box { grid-template-columns: 1fr; justify-items: center; }
   .mfa-secret-box { width: 100%; }
 }
+
+
+/* V8.4 — rolagem horizontal do Kanban no contêiner correto */
+.kanban-wrap {
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  scroll-behavior: auto;
+}
+.kanban-wrap.mouse-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.kanban-wrap:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
