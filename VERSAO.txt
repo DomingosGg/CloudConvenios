@@ -1,1 +1,1 @@
-﻿8.4.4 - Remoção da demonstração, exclusão protegida por senha e importação automática pelo CNPJ
+8.4.5 - Importação somente com CNPJ corrigida e consulta antes da validação
