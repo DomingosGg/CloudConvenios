@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.4.3" />
+  <meta name="app-version" content="8.4.4" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1733,11 +1733,8 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
           <div class="panel-header"><div><h2>Configurações</h2><p>Preferências, segurança dos dados e manutenção do sistema.</p></div></div>
           <div class="settings-grid">
             <div class="card"><div class="card-title"><h3>Aparência</h3></div><div class="setting-row"><div><strong>Tema do sistema</strong><small>Alterne entre o modo claro e escuro.</small></div><button class="btn btn-secondary" id="settingsTheme"><i class="fa-solid fa-circle-half-stroke"></i>Alternar tema</button></div></div>
-            <div class="card"><div class="card-title"><h3>Backup e restauração</h3></div><div class="setting-row"><div><strong>Criar backup</strong><small>Baixa todos os dados em formato JSON.</small></div><button class="btn btn-secondary" id="backupBtn"><i class="fa-solid fa-download"></i>Backup</button></div><div class="setting-row"><div><strong>Restaurar backup</strong><small>Substitui os dados atuais por um arquivo JSON.</small></div><button class="btn btn-secondary" id="restoreBtn"><i class="fa-solid fa-upload"></i>Restaurar</button></div></div>
-            <div class="card"><div class="card-title"><h3>Dados de demonstração</h3></div><div class="setting-row"><div><strong>Excluir registros fictícios</strong><small>Remove somente os registros marcados como demonstração.</small></div><button class="btn btn-danger" id="deleteDemoBtn"><i class="fa-solid fa-trash"></i>Excluir demonstração</button></div><div class="setting-row"><div><strong>Recriar demonstração</strong><small>Adiciona novamente os registros fictícios ausentes.</small></div><button class="btn btn-secondary" id="reloadDemoBtn"><i class="fa-solid fa-rotate"></i>Recriar dados</button></div></div>
-            <div class="card"><div class="card-title"><h3>Banco de dados online</h3></div><div class="setting-row"><div><strong>Supabase</strong><small id="databaseDetails">Banco ainda não configurado. O sistema segue no modo local.</small></div><span class="badge badge-warning" id="databaseStatus"><i class="fa-solid fa-circle-exclamation"></i>Pendente</span></div><div class="setting-row"><div><strong>Diagnóstico da conexão</strong><small>Confirma a URL, a chave pública e a instalação do esquema SQL.</small></div><button class="btn btn-secondary" id="testDatabaseBtn" type="button"><i class="fa-solid fa-plug-circle-check"></i>Testar conexão</button></div></div>
-            <div class="card"><div class="card-title"><h3>Armazenamento online</h3></div><div class="setting-row"><div><strong>Registros sincronizados</strong><small id="storageSummary">0 concedentes e 0 contatos no Supabase.</small></div><span class="badge badge-success"><i class="fa-solid fa-cloud"></i>Online</span></div><div class="setting-row"><div><strong>Limpar todos os dados</strong><small>Exclui permanentemente todos os cadastros e contatos do banco.</small></div><button class="btn btn-danger" id="clearAllBtn"><i class="fa-solid fa-triangle-exclamation"></i>Limpar tudo</button></div></div>
-            <div class="card" id="migrationCard"><div class="card-title"><h3>Migração do navegador</h3></div><div class="setting-row"><div><strong>Dados da versão local</strong><small id="localMigrationSummary">Verificando registros antigos deste navegador...</small></div><button class="btn btn-primary" id="migrateLocalBtn" type="button"><i class="fa-solid fa-cloud-arrow-up"></i>Migrar para o banco</button></div><div class="summary-box">A migração compara os CNPJs, atualiza duplicados e preserva o arquivo local como cópia de segurança.</div></div>
+            <div class="card"><div class="card-title"><h3>Backup e restauração</h3></div><div class="setting-row"><div><strong>Criar backup</strong><small>Baixa todos os dados em formato JSON.</small></div><button class="btn btn-secondary" id="backupBtn"><i class="fa-solid fa-download"></i>Backup</button></div><div class="setting-row"><div><strong>Restaurar backup</strong><small>Substitui os dados atuais por um arquivo JSON.</small></div><button class="btn btn-secondary" id="restoreBtn"><i class="fa-solid fa-upload"></i>Restaurar</button></div></div><div class="card"><div class="card-title"><h3>Banco de dados online</h3></div><div class="setting-row"><div><strong>Supabase</strong><small id="databaseDetails">Banco ainda não configurado. O sistema segue no modo local.</small></div><span class="badge badge-warning" id="databaseStatus"><i class="fa-solid fa-circle-exclamation"></i>Pendente</span></div><div class="setting-row"><div><strong>Diagnóstico da conexão</strong><small>Confirma a URL, a chave pública e a instalação do esquema SQL.</small></div><button class="btn btn-secondary" id="testDatabaseBtn" type="button"><i class="fa-solid fa-plug-circle-check"></i>Testar conexão</button></div></div>
+            <div class="card"><div class="card-title"><h3>Armazenamento online</h3></div><div class="setting-row"><div><strong>Registros sincronizados</strong><small id="storageSummary">0 concedentes e 0 contatos no Supabase.</small></div><span class="badge badge-success"><i class="fa-solid fa-cloud"></i>Online</span></div><div class="setting-row"><div><strong>Excluir todos os dados operacionais</strong><small>Exige a senha atual do administrador. Exclui concedentes e contatos, preservando usuários, permissões, configurações, auditoria e exportações.</small></div><button class="btn btn-danger" id="clearAllBtn"><i class="fa-solid fa-triangle-exclamation"></i>Excluir dados</button></div></div><div class="card" id="migrationCard"><div class="card-title"><h3>Migração do navegador</h3></div><div class="setting-row"><div><strong>Dados da versão local</strong><small id="localMigrationSummary">Verificando registros antigos deste navegador...</small></div><button class="btn btn-primary" id="migrateLocalBtn" type="button"><i class="fa-solid fa-cloud-arrow-up"></i>Migrar para o banco</button></div><div class="summary-box">A migração compara os CNPJs, atualiza duplicados e preserva o arquivo local como cópia de segurança.</div></div>
             <div class="card">
               <div class="card-title"><h3>Exportação automática</h3><span class="badge badge-success"><i class="fa-solid fa-clock"></i>Diária</span></div>
               <div class="setting-row">
@@ -1852,7 +1849,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 
   <div class="modal-backdrop" id="importModalBackdrop" data-admin-only aria-hidden="true">
     <div class="modal xl import-modal">
-      <div class="modal-header"><div><h3>Importação inteligente de planilha</h3><p class="modal-subtitle">Importe CSV, XLS ou XLSX com validação, prévia e complementação opcional por CNPJ.</p></div><button class="icon-btn" data-close="importModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-header"><div><h3>Importação inteligente de planilha</h3><p class="modal-subtitle">Importe CSV, XLS ou XLSX com validação, prévia e preenchimento automático dos campos ausentes pelo CNPJ.</p></div><button class="icon-btn" data-close="importModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
       <div class="modal-body">
         <div class="import-top-actions">
           <button class="btn btn-secondary" id="downloadImportTemplate" type="button"><i class="fa-solid fa-file-arrow-down"></i>Baixar modelo</button>
@@ -1861,7 +1858,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
         </div>
         <div class="import-options-card">
           <div class="field"><label>Tratamento de CNPJ duplicado</label><select class="form-control" id="duplicateStrategy"><option value="ignore">Ignorar duplicados</option><option value="update-empty">Preencher somente campos vazios</option><option value="update">Atualizar com os dados da planilha</option></select></div>
-          <label class="switch-row import-enrich-option"><input id="importEnrichCnpj" type="checkbox" checked /><span class="switch-control"></span><span><strong>Completar dados pelo CNPJ</strong><small>Consulta em fila para evitar bloqueios nas APIs gratuitas.</small></span></label>
+          <label class="switch-row import-enrich-option import-enrich-required"><input id="importEnrichCnpj" type="checkbox" checked disabled /><span class="switch-control"></span><span><strong>Completar automaticamente os campos vazios pelo CNPJ</strong><small>Inclui Razão Social, Nome Fantasia, situação cadastral, natureza jurídica, CNAE, endereço, telefone e e-mail quando disponíveis nas fontes públicas.</small></span></label>
         </div>
         <div id="importSummary" class="import-summary-grid"><div class="summary-box">Selecione uma planilha para iniciar a validação.</div></div>
         <div class="import-progress hidden" id="importProgress"><div class="import-progress-track"><span id="importProgressBar"></span></div><strong id="importProgressText">Preparando importação...</strong></div>
@@ -1926,6 +1923,33 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   </div>
 
   <div class="modal-backdrop" id="confirmModalBackdrop" aria-hidden="true"><div class="modal sm"><div class="modal-header"><h3 id="confirmTitle">Confirmar ação</h3><button class="icon-btn" data-close="confirmModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><p id="confirmMessage" style="margin:0;line-height:1.6"></p></div><div class="modal-footer"><button class="btn btn-secondary" data-close="confirmModalBackdrop">Cancelar</button><button class="btn btn-danger" id="confirmActionBtn">Confirmar</button></div></div></div>
+  <div class="modal-backdrop" id="clearAllPasswordModalBackdrop" data-admin-only aria-hidden="true">
+    <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="clearAllPasswordTitle">
+      <div class="modal-header">
+        <div><h3 id="clearAllPasswordTitle">Excluir dados operacionais</h3><p class="modal-subtitle">Confirmação protegida pela senha atual do administrador.</p></div>
+        <button class="icon-btn" type="button" data-close="clearAllPasswordModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="clearAllPasswordForm" novalidate>
+        <div class="modal-body">
+          <div class="summary-box audit-delete-warning"><i class="fa-solid fa-triangle-exclamation"></i><span>Serão excluídos permanentemente todos os cadastros de concedentes e seus contatos. Usuários, permissões, configurações, auditoria e histórico de exportações serão preservados.</span></div>
+          <div class="field">
+            <label>Senha atual do administrador <span class="required">*</span></label>
+            <div class="password-field">
+              <input class="form-control" id="clearAllPassword" type="password" autocomplete="current-password" maxlength="256" required />
+              <button class="password-toggle" id="clearAllPasswordToggle" type="button" aria-label="Mostrar senha"><i class="fa-regular fa-eye"></i></button>
+            </div>
+            <span class="field-hint">A senha é enviada somente à Function segura para validação no Supabase e não é armazenada.</span>
+          </div>
+          <label class="check-option clear-all-acknowledge"><input id="clearAllAcknowledge" type="checkbox" required /> Estou ciente de que esta exclusão é permanente.</label>
+          <div class="auth-message hidden" id="clearAllPasswordError"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" type="button" data-close="clearAllPasswordModalBackdrop">Cancelar</button>
+          <button class="btn btn-danger" id="clearAllConfirmBtn" type="submit"><i class="fa-solid fa-trash"></i>Excluir dados</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1933,7 +1957,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.4.3-cnpj-fields-fix';
+    window.__CONVENIOS_BUILD__ = '8.4.4-security-import';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -6013,90 +6037,53 @@ window.APP_CONFIG = Object.freeze({
       $$('.kanban-column').forEach(col=>{col.addEventListener('dragover',e=>{if(!canEdit())return;e.preventDefault();col.classList.add('drag-over');});col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drag-over');if(!canEdit()){toast('error','Acesso restrito','Seu perfil não pode movimentar o Kanban.');return;}const id=e.dataTransfer.getData('text/plain');const c=state.data.concedentes.find(x=>x.id===id);if(c&&c.situacao!==col.dataset.stage){const previous=c.situacao;c.situacao=col.dataset.stage;renderAll();applyAccessRules();try{await window.remoteData.updateCompanyStatus(id,col.dataset.stage,c.formasContato);toast('success','Etapa atualizada',`O cartão foi movido para “${col.dataset.stage}”.`);}catch(error){c.situacao=previous;renderAll();applyAccessRules();toast('error','Falha ao mover cartão',error.message||'Não foi possível atualizar a etapa.');}}});});
       $$('[data-kanban-contact]').forEach(b=>b.onclick=e=>{e.stopPropagation();openContactForm(b.dataset.kanbanContact);});
       const board = $('#kanbanBoard');
-      const scroller = board?.closest('.kanban-wrap');
-      if (scroller) {
-        scroller.scrollLeft = state.kanbanScrollLeft || 0;
-        enableKanbanMouseScroll(scroller);
+      if (board) {
+        board.scrollLeft = state.kanbanScrollLeft || 0;
+        enableKanbanMouseScroll(board);
       }
     }
 
-    function enableKanbanMouseScroll(scroller = document.querySelector('.kanban-wrap')) {
-      if (!scroller || scroller.dataset.mouseScrollBound === 'true') return;
-      scroller.dataset.mouseScrollBound = 'true';
-      scroller.setAttribute('tabindex', '0');
-      scroller.setAttribute('aria-label', 'Quadro de renovações com rolagem horizontal');
+    function enableKanbanMouseScroll(board = $('#kanbanBoard')) {
+      if (!board || board.dataset.mouseScrollBound === 'true') return;
+      board.dataset.mouseScrollBound = 'true';
 
-      scroller.addEventListener('scroll', () => {
-        state.kanbanScrollLeft = scroller.scrollLeft;
+      board.addEventListener('scroll', () => {
+        state.kanbanScrollLeft = board.scrollLeft;
       }, { passive: true });
 
-      scroller.addEventListener('wheel', (event) => {
-        if (scroller.scrollWidth <= scroller.clientWidth) return;
-
-        const horizontalDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-          ? event.deltaX
-          : event.deltaY;
-
-        if (!horizontalDelta) return;
-
-        const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-        const next = Math.max(0, Math.min(maxScroll, scroller.scrollLeft + horizontalDelta));
-
-        // Impede a rolagem vertical da página somente quando o quadro realmente se mover.
-        if (next !== scroller.scrollLeft) {
-          event.preventDefault();
-          scroller.scrollLeft = next;
-        }
+      board.addEventListener('wheel', (event) => {
+        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+        if (board.scrollWidth <= board.clientWidth) return;
+        event.preventDefault();
+        board.scrollLeft += event.deltaY;
       }, { passive: false });
 
       let dragging = false;
       let startX = 0;
       let startScroll = 0;
-      let activePointerId = null;
 
-      scroller.addEventListener('pointerdown', (event) => {
-        if (
-          event.button !== 0 ||
-          event.target.closest('button, input, select, textarea, a, .kanban-card')
-        ) return;
-
+      board.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || event.target.closest('button, input, select, textarea, a, .kanban-card')) return;
         dragging = true;
-        activePointerId = event.pointerId;
         startX = event.clientX;
-        startScroll = scroller.scrollLeft;
-        scroller.classList.add('mouse-dragging');
-        scroller.setPointerCapture?.(event.pointerId);
+        startScroll = board.scrollLeft;
+        board.classList.add('mouse-dragging');
+        board.setPointerCapture?.(event.pointerId);
       });
 
-      scroller.addEventListener('pointermove', (event) => {
-        if (!dragging || event.pointerId !== activePointerId) return;
-        event.preventDefault();
-        scroller.scrollLeft = startScroll - (event.clientX - startX);
+      board.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        board.scrollLeft = startScroll - (event.clientX - startX);
       });
 
       const stopDragging = (event) => {
         if (!dragging) return;
         dragging = false;
-        scroller.classList.remove('mouse-dragging');
-        if (activePointerId !== null) {
-          try { scroller.releasePointerCapture?.(activePointerId); } catch {}
-        }
-        activePointerId = null;
+        board.classList.remove('mouse-dragging');
+        if (event?.pointerId !== undefined) board.releasePointerCapture?.(event.pointerId);
       };
-
-      scroller.addEventListener('pointerup', stopDragging);
-      scroller.addEventListener('pointercancel', stopDragging);
-      scroller.addEventListener('lostpointercapture', stopDragging);
-
-      // Setas também movem o quadro quando ele está focado.
-      scroller.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        scroller.scrollBy({
-          left: event.key === 'ArrowRight' ? 320 : -320,
-          behavior: 'smooth'
-        });
-      });
+      board.addEventListener('pointerup', stopDragging);
+      board.addEventListener('pointercancel', stopDragging);
     }
 
     function renderAlerts() {
@@ -6526,7 +6513,7 @@ window.APP_CONFIG = Object.freeze({
       const company = entry.company;
       const issues = [];
       const warnings = [];
-      const enrich = Boolean($('#importEnrichCnpj')?.checked);
+      const enrich = true;
       const validCnpj = !company.cnpj || cnpjValidLength(company.cnpj);
       const existing = company.cnpj
         ? state.data.concedentes.find((item) => cnpjKey(item.cnpj) === cnpjKey(company.cnpj)) || null
@@ -6664,7 +6651,7 @@ window.APP_CONFIG = Object.freeze({
     async function confirmImport() {
       if (!ensureAdmin('importar planilhas') || state.importRunning || !state.importRows.length) return;
       const strategy = $('#duplicateStrategy').value;
-      const enrich = Boolean($('#importEnrichCnpj').checked);
+      const enrich = true;
       const button = $('#confirmImport');
       state.importRunning = true;
       state.importErrors = [];
@@ -6682,7 +6669,7 @@ window.APP_CONFIG = Object.freeze({
 
           try {
             if (enrich && company.cnpj && cnpjValidLength(company.cnpj) && window.cnpjService) {
-              const missing = ['razaoSocial','cidade','estado','email','telefone','logradouro'].some((field) => !String(company[field] || '').trim());
+              const missing = CNPJ_FILL_FIELDS.some((field) => !String(company[field] || '').trim());
               if (missing) {
                 try {
                   const lookup = await window.cnpjService.lookup(company.cnpj);
@@ -6747,6 +6734,122 @@ window.APP_CONFIG = Object.freeze({
       downloadBlob(csv, 'text/csv;charset=utf-8;', `erros_importacao_${new Date().toLocaleDateString('pt-BR').replaceAll('/', '-')}.csv`);
     }
 
+
+
+    function setClearAllPasswordError(message = '') {
+      const holder = $('#clearAllPasswordError');
+      if (!holder) return;
+      holder.textContent = message;
+      holder.classList.toggle('hidden', !message);
+    }
+
+    function openClearAllPasswordModal() {
+      if (!ensureAdmin('limpar os dados operacionais')) return;
+      const form = $('#clearAllPasswordForm');
+      form?.reset();
+      setClearAllPasswordError('');
+      const button = $('#clearAllConfirmBtn');
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-trash"></i>Excluir dados';
+      }
+      openModal('clearAllPasswordModalBackdrop');
+      setTimeout(() => $('#clearAllPassword')?.focus(), 80);
+    }
+
+    async function clearAllOperationalData(password) {
+      const client = window.database?.client;
+      if (!client) throw new Error('Cliente do Supabase indisponível.');
+
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+
+      const accessToken = data?.session?.access_token || '';
+      if (!accessToken) {
+        const sessionError = new Error('Sua sessão não está ativa. Entre novamente no sistema.');
+        sessionError.code = 'SESSION_REQUIRED';
+        throw sessionError;
+      }
+
+      const response = await fetch('/api/admin-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Cache-Control': 'no-store'
+        },
+        body: JSON.stringify({
+          action: 'clear_all',
+          password
+        }),
+        cache: 'no-store'
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        const error = new Error(payload?.message || `Não foi possível excluir os dados (${response.status}).`);
+        error.code = payload?.code || null;
+        error.status = response.status;
+        throw error;
+      }
+
+      return payload.data || {};
+    }
+
+    async function submitClearAllPassword(event) {
+      event.preventDefault();
+      if (!ensureAdmin('limpar os dados operacionais')) return;
+
+      const password = $('#clearAllPassword')?.value || '';
+      const acknowledged = Boolean($('#clearAllAcknowledge')?.checked);
+      const button = $('#clearAllConfirmBtn');
+
+      setClearAllPasswordError('');
+
+      if (!password) {
+        setClearAllPasswordError('Informe a senha atual da sua conta administrativa.');
+        $('#clearAllPassword')?.focus();
+        return;
+      }
+
+      if (!acknowledged) {
+        setClearAllPasswordError('Confirme que está ciente de que a exclusão é permanente.');
+        $('#clearAllAcknowledge')?.focus();
+        return;
+      }
+
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Validando e excluindo…';
+      }
+
+      try {
+        const result = await clearAllOperationalData(password);
+        state.data.concedentes = [];
+        state.selectedContactCompanyId = null;
+        closeModal('clearAllPasswordModalBackdrop');
+        renderAll();
+        applyAccessRules();
+        toast(
+          'success',
+          'Dados operacionais removidos',
+          `${Number(result.concedentes_excluidas || 0)} concedente(s) e ${Number(result.contatos_excluidos || 0)} contato(s) foram excluídos.`
+        );
+      } catch (error) {
+        const message = error?.code === 'INVALID_PASSWORD'
+          ? 'Senha incorreta. Digite a senha atual da conta administrativa.'
+          : error?.code === 'MFA_REQUIRED'
+            ? 'Confirme o código do aplicativo autenticador e tente novamente.'
+            : error?.message || 'Não foi possível excluir os dados.';
+        setClearAllPasswordError(message);
+        toast('error', 'Exclusão não realizada', message);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = '<i class="fa-solid fa-trash"></i>Excluir dados';
+        }
+      }
+    }
 
     function backupJSON(){if(!ensureAdmin('criar backups'))return;const content=JSON.stringify({...state.data,source:'supabase',exportedAt:new Date().toISOString()},null,2);downloadBlob(content,'application/json;charset=utf-8;',`backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/','-')}.json`);toast('success','Backup criado','O arquivo JSON foi gerado com os dados do Supabase.');}
     function restoreJSON(file){if(!ensureAdmin('restaurar backups'))return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||!Array.isArray(parsed.concedentes))throw new Error('Estrutura inválida');confirmAction('Restaurar backup','Todos os dados do banco serão substituídos pelo conteúdo do arquivo. Deseja continuar?',async()=>{try{const result=await window.remoteData.replaceAll(parsed.concedentes.map(normalizeCompany));await loadRemoteData({silent:true});toast('success','Backup restaurado',`${result.inserted} concedente(s) e ${result.contactsInserted} contato(s) restaurado(s).`);}catch(error){toast('error','Falha na restauração',error.message||'Não foi possível restaurar o backup.');}});}catch(e){toast('error','Backup inválido','O arquivo JSON não possui uma estrutura compatível.');}};reader.readAsText(file);}
@@ -6837,14 +6940,21 @@ window.APP_CONFIG = Object.freeze({
       $('#csvFileInput').onchange=e=>{if(e.target.files[0])handleSpreadsheetFile(e.target.files[0]);e.target.value='';};
       $('#downloadImportTemplate').onclick=downloadImportTemplate;
       $('#duplicateStrategy').onchange=renderImportPreview;
-      $('#importEnrichCnpj').onchange=renderImportPreview;
+      $('#importEnrichCnpj')?.addEventListener('change', renderImportPreview);
       $('#downloadImportErrors').onclick=downloadImportErrors;
       $('#confirmImport').onclick=confirmImport;
       $('#exportReports').onclick=exportReportCSV; $('#printReports').onclick=()=>window.print();
       $('#backupBtn').onclick=backupJSON; $('#restoreBtn').onclick=()=>$('#jsonFileInput').click(); $('#jsonFileInput').onchange=e=>{if(e.target.files[0])restoreJSON(e.target.files[0]);e.target.value='';};
-      $('#deleteDemoBtn').onclick=()=>{if(!ensureAdmin('excluir dados de demonstração'))return;confirmAction('Excluir dados de demonstração','Deseja remover todos os registros fictícios do banco? Os cadastros reais serão preservados.',async()=>{try{const count=await window.remoteData.deleteDemonstration();await loadRemoteData({silent:true});toast('success','Demonstração removida',`${count} registro(s) fictício(s) excluído(s).`);}catch(error){toast('error','Falha ao excluir demonstração',error.message||'Não foi possível excluir os registros.');}});};
-      $('#reloadDemoBtn').onclick=async()=>{if(!ensureAdmin('recriar dados de demonstração'))return;const existing=new Set(state.data.concedentes.map(c=>cnpjKey(c.cnpj)).filter(Boolean));const demos=makeDemoData().filter(c=>!existing.has(cnpjKey(c.cnpj)));if(!demos.length){toast('info','Demonstração já existente','Todos os registros fictícios já estão cadastrados.');return;}try{const result=await window.remoteData.insertCompaniesWithContacts(demos);await loadRemoteData({silent:true});toast('success','Demonstração recriada',`${result.inserted} registro(s) e ${result.contactsInserted} contato(s) adicionados.`);}catch(error){toast('error','Falha ao recriar demonstração',error.message||'Não foi possível adicionar os registros.');}};
-      $('#clearAllBtn').onclick=()=>{if(!ensureAdmin('limpar o banco de dados'))return;confirmAction('Limpar todos os dados','Esta ação excluirá permanentemente todos os cadastros e contatos do banco online. Deseja continuar?',async()=>{try{const count=await window.remoteData.clearAll();state.data.concedentes=[];state.selectedContactCompanyId=null;renderAll();toast('success','Dados removidos',`${count} concedente(s) foram excluída(s) do banco.`);}catch(error){toast('error','Falha ao limpar dados',error.message||'Não foi possível excluir os registros.');}});};
+      $('#clearAllBtn').onclick=openClearAllPasswordModal;
+      $('#clearAllPasswordForm')?.addEventListener('submit', submitClearAllPassword);
+      $('#clearAllPasswordToggle')?.addEventListener('click', () => {
+        const input = $('#clearAllPassword');
+        if (!input) return;
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        $('#clearAllPasswordToggle').innerHTML = `<i class="fa-regular ${visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+        $('#clearAllPasswordToggle').setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+      });
       $('#migrateLocalBtn').onclick=migrateLocalData;
       $('#exportHistoryRefresh')?.addEventListener('click', () => loadExportHistory({ force: true }));
       document.addEventListener('click', (event) => {
@@ -6894,7 +7004,8 @@ window.APP_CONFIG = Object.freeze({
   })();
   </script>
 
-  <div id="releaseMarkerV84" data-version="8.4.0" hidden></div>
+  <div id="releaseMarkerV844" data-version="8.4.4" hidden></div>
 </body>
 </html>
+
 

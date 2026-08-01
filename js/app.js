@@ -1387,7 +1387,7 @@
       const company = entry.company;
       const issues = [];
       const warnings = [];
-      const enrich = Boolean($('#importEnrichCnpj')?.checked);
+      const enrich = true;
       const validCnpj = !company.cnpj || cnpjValidLength(company.cnpj);
       const existing = company.cnpj
         ? state.data.concedentes.find((item) => cnpjKey(item.cnpj) === cnpjKey(company.cnpj)) || null
@@ -1525,7 +1525,7 @@
     async function confirmImport() {
       if (!ensureAdmin('importar planilhas') || state.importRunning || !state.importRows.length) return;
       const strategy = $('#duplicateStrategy').value;
-      const enrich = Boolean($('#importEnrichCnpj').checked);
+      const enrich = true;
       const button = $('#confirmImport');
       state.importRunning = true;
       state.importErrors = [];
@@ -1543,7 +1543,7 @@
 
           try {
             if (enrich && company.cnpj && cnpjValidLength(company.cnpj) && window.cnpjService) {
-              const missing = ['razaoSocial','cidade','estado','email','telefone','logradouro'].some((field) => !String(company[field] || '').trim());
+              const missing = CNPJ_FILL_FIELDS.some((field) => !String(company[field] || '').trim());
               if (missing) {
                 try {
                   const lookup = await window.cnpjService.lookup(company.cnpj);
@@ -1608,6 +1608,122 @@
       downloadBlob(csv, 'text/csv;charset=utf-8;', `erros_importacao_${new Date().toLocaleDateString('pt-BR').replaceAll('/', '-')}.csv`);
     }
 
+
+
+    function setClearAllPasswordError(message = '') {
+      const holder = $('#clearAllPasswordError');
+      if (!holder) return;
+      holder.textContent = message;
+      holder.classList.toggle('hidden', !message);
+    }
+
+    function openClearAllPasswordModal() {
+      if (!ensureAdmin('limpar os dados operacionais')) return;
+      const form = $('#clearAllPasswordForm');
+      form?.reset();
+      setClearAllPasswordError('');
+      const button = $('#clearAllConfirmBtn');
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-trash"></i>Excluir dados';
+      }
+      openModal('clearAllPasswordModalBackdrop');
+      setTimeout(() => $('#clearAllPassword')?.focus(), 80);
+    }
+
+    async function clearAllOperationalData(password) {
+      const client = window.database?.client;
+      if (!client) throw new Error('Cliente do Supabase indisponível.');
+
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+
+      const accessToken = data?.session?.access_token || '';
+      if (!accessToken) {
+        const sessionError = new Error('Sua sessão não está ativa. Entre novamente no sistema.');
+        sessionError.code = 'SESSION_REQUIRED';
+        throw sessionError;
+      }
+
+      const response = await fetch('/api/admin-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Cache-Control': 'no-store'
+        },
+        body: JSON.stringify({
+          action: 'clear_all',
+          password
+        }),
+        cache: 'no-store'
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        const error = new Error(payload?.message || `Não foi possível excluir os dados (${response.status}).`);
+        error.code = payload?.code || null;
+        error.status = response.status;
+        throw error;
+      }
+
+      return payload.data || {};
+    }
+
+    async function submitClearAllPassword(event) {
+      event.preventDefault();
+      if (!ensureAdmin('limpar os dados operacionais')) return;
+
+      const password = $('#clearAllPassword')?.value || '';
+      const acknowledged = Boolean($('#clearAllAcknowledge')?.checked);
+      const button = $('#clearAllConfirmBtn');
+
+      setClearAllPasswordError('');
+
+      if (!password) {
+        setClearAllPasswordError('Informe a senha atual da sua conta administrativa.');
+        $('#clearAllPassword')?.focus();
+        return;
+      }
+
+      if (!acknowledged) {
+        setClearAllPasswordError('Confirme que está ciente de que a exclusão é permanente.');
+        $('#clearAllAcknowledge')?.focus();
+        return;
+      }
+
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Validando e excluindo…';
+      }
+
+      try {
+        const result = await clearAllOperationalData(password);
+        state.data.concedentes = [];
+        state.selectedContactCompanyId = null;
+        closeModal('clearAllPasswordModalBackdrop');
+        renderAll();
+        applyAccessRules();
+        toast(
+          'success',
+          'Dados operacionais removidos',
+          `${Number(result.concedentes_excluidas || 0)} concedente(s) e ${Number(result.contatos_excluidos || 0)} contato(s) foram excluídos.`
+        );
+      } catch (error) {
+        const message = error?.code === 'INVALID_PASSWORD'
+          ? 'Senha incorreta. Digite a senha atual da conta administrativa.'
+          : error?.code === 'MFA_REQUIRED'
+            ? 'Confirme o código do aplicativo autenticador e tente novamente.'
+            : error?.message || 'Não foi possível excluir os dados.';
+        setClearAllPasswordError(message);
+        toast('error', 'Exclusão não realizada', message);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = '<i class="fa-solid fa-trash"></i>Excluir dados';
+        }
+      }
+    }
 
     function backupJSON(){if(!ensureAdmin('criar backups'))return;const content=JSON.stringify({...state.data,source:'supabase',exportedAt:new Date().toISOString()},null,2);downloadBlob(content,'application/json;charset=utf-8;',`backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/','-')}.json`);toast('success','Backup criado','O arquivo JSON foi gerado com os dados do Supabase.');}
     function restoreJSON(file){if(!ensureAdmin('restaurar backups'))return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||!Array.isArray(parsed.concedentes))throw new Error('Estrutura inválida');confirmAction('Restaurar backup','Todos os dados do banco serão substituídos pelo conteúdo do arquivo. Deseja continuar?',async()=>{try{const result=await window.remoteData.replaceAll(parsed.concedentes.map(normalizeCompany));await loadRemoteData({silent:true});toast('success','Backup restaurado',`${result.inserted} concedente(s) e ${result.contactsInserted} contato(s) restaurado(s).`);}catch(error){toast('error','Falha na restauração',error.message||'Não foi possível restaurar o backup.');}});}catch(e){toast('error','Backup inválido','O arquivo JSON não possui uma estrutura compatível.');}};reader.readAsText(file);}
@@ -1698,14 +1814,21 @@
       $('#csvFileInput').onchange=e=>{if(e.target.files[0])handleSpreadsheetFile(e.target.files[0]);e.target.value='';};
       $('#downloadImportTemplate').onclick=downloadImportTemplate;
       $('#duplicateStrategy').onchange=renderImportPreview;
-      $('#importEnrichCnpj').onchange=renderImportPreview;
+      $('#importEnrichCnpj')?.addEventListener('change', renderImportPreview);
       $('#downloadImportErrors').onclick=downloadImportErrors;
       $('#confirmImport').onclick=confirmImport;
       $('#exportReports').onclick=exportReportCSV; $('#printReports').onclick=()=>window.print();
       $('#backupBtn').onclick=backupJSON; $('#restoreBtn').onclick=()=>$('#jsonFileInput').click(); $('#jsonFileInput').onchange=e=>{if(e.target.files[0])restoreJSON(e.target.files[0]);e.target.value='';};
-      $('#deleteDemoBtn').onclick=()=>{if(!ensureAdmin('excluir dados de demonstração'))return;confirmAction('Excluir dados de demonstração','Deseja remover todos os registros fictícios do banco? Os cadastros reais serão preservados.',async()=>{try{const count=await window.remoteData.deleteDemonstration();await loadRemoteData({silent:true});toast('success','Demonstração removida',`${count} registro(s) fictício(s) excluído(s).`);}catch(error){toast('error','Falha ao excluir demonstração',error.message||'Não foi possível excluir os registros.');}});};
-      $('#reloadDemoBtn').onclick=async()=>{if(!ensureAdmin('recriar dados de demonstração'))return;const existing=new Set(state.data.concedentes.map(c=>cnpjKey(c.cnpj)).filter(Boolean));const demos=makeDemoData().filter(c=>!existing.has(cnpjKey(c.cnpj)));if(!demos.length){toast('info','Demonstração já existente','Todos os registros fictícios já estão cadastrados.');return;}try{const result=await window.remoteData.insertCompaniesWithContacts(demos);await loadRemoteData({silent:true});toast('success','Demonstração recriada',`${result.inserted} registro(s) e ${result.contactsInserted} contato(s) adicionados.`);}catch(error){toast('error','Falha ao recriar demonstração',error.message||'Não foi possível adicionar os registros.');}};
-      $('#clearAllBtn').onclick=()=>{if(!ensureAdmin('limpar o banco de dados'))return;confirmAction('Limpar todos os dados','Esta ação excluirá permanentemente todos os cadastros e contatos do banco online. Deseja continuar?',async()=>{try{const count=await window.remoteData.clearAll();state.data.concedentes=[];state.selectedContactCompanyId=null;renderAll();toast('success','Dados removidos',`${count} concedente(s) foram excluída(s) do banco.`);}catch(error){toast('error','Falha ao limpar dados',error.message||'Não foi possível excluir os registros.');}});};
+      $('#clearAllBtn').onclick=openClearAllPasswordModal;
+      $('#clearAllPasswordForm')?.addEventListener('submit', submitClearAllPassword);
+      $('#clearAllPasswordToggle')?.addEventListener('click', () => {
+        const input = $('#clearAllPassword');
+        if (!input) return;
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        $('#clearAllPasswordToggle').innerHTML = `<i class="fa-regular ${visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+        $('#clearAllPasswordToggle').setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+      });
       $('#migrateLocalBtn').onclick=migrateLocalData;
       $('#exportHistoryRefresh')?.addEventListener('click', () => loadExportHistory({ force: true }));
       document.addEventListener('click', (event) => {
