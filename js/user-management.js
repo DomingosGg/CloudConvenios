@@ -112,120 +112,29 @@
     return health;
   }
 
-  function isSigningKeyError(value = '') {
-    const message = String(value || '').toLowerCase();
-    return message.includes('unrecognized jwt kid')
-      || message.includes('token is unverifiable')
-      || message.includes('unable to parse or verify signature')
-      || message.includes('invalid jwt')
-      || message.includes('jwt expired');
-  }
-
-  function decodeJwtPayload(token = '') {
-    try {
-      const payload = token.split('.')[1];
-      if (!payload) return {};
-      const normalized = payload
-        .replace(/-/g, '+')
-        .replace(/_/g, '/')
-        .padEnd(Math.ceil(payload.length / 4) * 4, '=');
-      return JSON.parse(atob(normalized));
-    } catch {
-      return {};
-    }
-  }
-
-  async function getAccessToken({ refresh = false } = {}) {
+  async function api(action, payload = {}) {
     const client = getClient();
-    if (!client) {
-      const error = new Error('Cliente do Supabase indisponível. Recarregue a página.');
-      error.code = 'CLIENT_UNAVAILABLE';
-      throw error;
-    }
-
-    let result = refresh
-      ? await client.auth.refreshSession()
-      : await client.auth.getSession();
-
-    if (result.error) throw result.error;
-
-    let session = result.data?.session || null;
-    let token = session?.access_token || '';
-    if (!token) {
-      const error = new Error('Não existe uma sessão ativa para consultar os usuários.');
-      error.code = 'SESSION_REQUIRED';
-      throw error;
-    }
-
-    const claims = decodeJwtPayload(token);
-    const secondsRemaining = Number(claims.exp || 0) - Math.floor(Date.now() / 1000);
-
-    if (!refresh && secondsRemaining > 0 && secondsRemaining < 120) {
-      result = await client.auth.refreshSession(session);
-      if (result.error) throw result.error;
-      session = result.data?.session || null;
-      token = session?.access_token || '';
-    }
-
-    if (!token) {
-      const error = new Error('Não foi possível obter um token de acesso válido.');
-      error.code = 'SESSION_REQUIRED';
-      throw error;
-    }
-
-    return token;
-  }
-
-  async function api(action, payload = {}, attempt = 0) {
-    const token = await getAccessToken({ refresh: attempt > 0 });
+    if (!client) throw new Error('Cliente do Supabase indisponível. Recarregue a página.');
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Sua sessão expirou. Entre novamente.');
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ action, payload }),
       cache: 'no-store'
     });
-
     let result = null;
-    try {
-      result = await response.json();
-    } catch {
-      result = null;
-    }
-
+    try { result = await response.json(); } catch {}
     if (!response.ok || !result?.ok) {
-      const rawMessage = result?.message || `Falha na gestão de usuários (${response.status}).`;
-      const code = String(result?.code || '');
-
-      const canRefresh = response.status === 401
-        || code === 'STALE_SESSION'
-        || code === 'SESSION_EXPIRED'
-        || code === 'INVALID_SESSION'
-        || code === 'PROJECT_MISMATCH'
-        || isSigningKeyError(rawMessage);
-
-      if (attempt === 0 && canRefresh) {
-        setBackendStatus('warning', 'Renovando a credencial administrativa e tentando novamente…');
-        return api(action, payload, 1);
-      }
-
       const message = response.status === 404
         ? 'A função users-admin não foi encontrada no Cloudflare Pages.'
-        : response.status === 401
-          ? 'A função de usuários não conseguiu validar a credencial. A sessão principal foi mantida; clique em Atualizar para tentar novamente.'
-          : rawMessage;
-
-      setBackendStatus(response.status === 401 ? 'warning' : 'error', message);
-
-      const error = new Error(message);
-      error.code = code;
-      error.status = response.status;
-      throw error;
+        : (result?.message || `Falha na gestão de usuários (${response.status}).`);
+      setBackendStatus('error', message);
+      throw new Error(message);
     }
-
     setBackendStatus('ok', `Função de usuários conectada — versão ${result.version || 'atual'}.`);
     return result.data;
   }

@@ -233,34 +233,6 @@
     return contactFromDatabase(data);
   }
 
-  async function updateContact(companyId, contact, company) {
-    assertClient();
-    if (!contact?.id) throw new Error('Registro de contato inválido.');
-
-    const { data, error } = await client
-      .from('contatos')
-      .update(contactToDatabase(contact, companyId))
-      .eq('id', contact.id)
-      .eq('concedente_id', companyId)
-      .select('*')
-      .single();
-
-    if (error) throw databaseError(error, 'Não foi possível atualizar o contato.');
-
-    const saved = contactFromDatabase(data);
-    const projectedContacts = (company?.contatos || []).map((item) => item.id === saved.id ? saved : item);
-    const latest = [...projectedContacts].sort((a, b) => `${b.data} ${b.horario}`.localeCompare(`${a.data} ${a.horario}`))[0] || saved;
-    const formas = [...new Set(projectedContacts.map((item) => item.forma).filter(Boolean))];
-
-    try {
-      await updateCompanyStatus(companyId, latest.resultado || company?.situacao || 'Não contatado', formas);
-    } catch (updateError) {
-      throw new Error(`O contato foi atualizado, mas a situação da concedente não foi sincronizada: ${updateError.message}`);
-    }
-
-    return saved;
-  }
-
   async function deleteDemonstration() {
     assertAdmin();
     const { data, error } = await client
@@ -371,7 +343,6 @@
     deleteCompany,
     updateCompanyStatus,
     createContact,
-    updateContact,
     deleteDemonstration,
     clearAll,
     insertCompaniesWithContacts,
