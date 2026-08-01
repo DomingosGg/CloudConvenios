@@ -1,0 +1,16 @@
+{
+  "status": "ok",
+  "gerado_em": "2026-08-01T08:02:57",
+  "origem": "C:\\Users\\Domingos\\Documents\\SISTEMA-CONVENIOS-COMPLETO-CORRIGIDO-FUNCOES-NETLIFY\\SISTEMA-CONVENIOS-COMPLETO-CORRIGIDO-FUNCOES-NETLIFY",
+  "raiz_detectada": "C:\\Users\\Domingos\\Documents\\SISTEMA-CONVENIOS-COMPLETO-CORRIGIDO-FUNCOES-NETLIFY\\SISTEMA-CONVENIOS-COMPLETO-CORRIGIDO-FUNCOES-NETLIFY",
+  "pasta_pronta": "C:\\Users\\Domingos\\Documents\\PREPARADOR_REPOSITORIO_CLOUDFLARE_COMPLETO\\preparador_repositorio_cloudflare\\PROJETO-CLOUDFLARE-PRONTO",
+  "zip_pronto": "C:\\Users\\Domingos\\Documents\\PREPARADOR_REPOSITORIO_CLOUDFLARE_COMPLETO\\preparador_repositorio_cloudflare\\PROJETO-CLOUDFLARE-PRONTO.zip",
+  "endpoints_atualizados": [],
+  "itens_netlify_removidos": [],
+  "arquivos_obrigatorios_ausentes": [],
+  "avisos_estrutura": [],
+  "possiveis_segredos": [],
+  "referencias_netlify_restantes": [
+    "CORRECAO-FUNCOES-NETLIFY.md"
+  ]
+}
