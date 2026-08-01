@@ -18,7 +18,7 @@ Esta pasta está pronta para ser enviada à **raiz de um novo repositório GitHu
 
 1. Envie **todo o conteúdo desta pasta** para a raiz do novo repositório.
 2. No Cloudflare, crie um projeto Pages conectado ao repositório.
-3. Use `None` como framework, deixe o comando de build vazio e use `.` como diretório de saída.
+3. Confirme que o projeto é do tipo **Pages**. Use `None` como framework, deixe o comando de build vazio, use `.` como diretório de saída e não configure `wrangler deploy`.
 4. Em **Settings → Variables and Secrets**, cadastre:
    - `SUPABASE_URL`
    - `SUPABASE_SECRET_KEY` como segredo
@@ -33,3 +33,8 @@ Ao continuar usando o mesmo projeto Supabase, não execute novamente a instalaç
 ## Segurança
 
 Nunca publique `SUPABASE_SECRET_KEY`, arquivos `.env` ou `.dev.vars`. A chave pública/anon usada pelo navegador pode permanecer em `js/supabase-config.js`, desde que as políticas RLS estejam ativas.
+
+
+## Correção do erro de redirecionamento
+
+O arquivo `_redirects` não faz parte deste pacote. A regra antiga `/* /index.html 200` causava um loop no tratamento automático de HTML do Cloudflare. Arquivos `wrangler.jsonc` também não devem ser adicionados a esta versão Pages.

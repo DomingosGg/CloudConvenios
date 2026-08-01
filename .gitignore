@@ -21,3 +21,8 @@ Thumbs.db
 *.tmp
 *.bak
 *_backup_*/
+
+# Configuracoes de deploy Worker que nao pertencem a esta versao Pages
+wrangler.json
+wrangler.jsonc
+wrangler.toml

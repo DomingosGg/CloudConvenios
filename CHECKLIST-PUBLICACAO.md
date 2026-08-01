@@ -3,10 +3,13 @@
 ## GitHub
 
 - [ ] O conteúdo deste pacote foi enviado diretamente à raiz do novo repositório.
-- [ ] `index.html`, `functions/`, `_routes.json`, `_headers` e `_redirects` aparecem na raiz.
-- [ ] Não existem arquivos `.env`, `.dev.vars` ou chaves administrativas no repositório.
+- [ ] `index.html`, `functions/`, `_routes.json` e `_headers` aparecem na raiz.
+- [ ] Não existem `_redirects`, `wrangler.jsonc`, arquivos `.env`, `.dev.vars` ou chaves administrativas no repositório.
 
 ## Cloudflare Pages
+
+- [ ] O projeto foi criado explicitamente como **Pages**, e não como Worker.
+- [ ] Não existe comando de deploy `wrangler deploy`.
 
 - [ ] Repositório e branch principal conectados.
 - [ ] Framework preset definido como `None`.

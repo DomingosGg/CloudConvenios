@@ -1,6 +1,6 @@
 {
   "status": "pronto_para_publicacao",
-  "gerado_em": "2026-08-01T11:07:34.251349+00:00",
+  "gerado_em": "2026-08-01T11:16:02.919963+00:00",
   "plataforma": "cloudflare-pages",
   "endpoints": [
     "/api/health",
@@ -13,5 +13,16 @@
     "functions/api/cnpj-lookup.js"
   ],
   "referencias_netlify_ativas": [],
-  "observacao": "Documentos históricos do Netlify foram preservados em docs/historico-netlify e não fazem parte da configuração ativa."
+  "observacao": "Documentos históricos do Netlify foram preservados em docs/historico-netlify e não fazem parte da configuração ativa.",
+  "correcoes": [
+    "arquivo _redirects removido para eliminar ciclo infinito",
+    "arquivos wrangler removidos para publicação por Cloudflare Pages Git integration",
+    "checklist atualizado para diferenciar Pages de Workers"
+  ],
+  "arquivos_proibidos_confirmados_ausentes": [
+    "_redirects",
+    "wrangler.json",
+    "wrangler.jsonc",
+    "wrangler.toml"
+  ]
 }
