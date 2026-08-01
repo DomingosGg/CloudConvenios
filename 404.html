@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
+  <title>Gestão de Renovações de Convênios</title>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <!-- Estilos incorporados para evitar página sem formatação quando a pasta CSS não for publicada. -->
+  <style id="app-inline-styles">
+:root {
+      --primary: #1D1934;
+      --brand-purple: #1D1934;
+      --brand-yellow: #FFC629;
+      --accent: #FFC629;
+      --primary-dark: #100D22;
+      --primary-soft: rgba(29,25,52,.10);
+      --accent-soft: rgba(255,198,41,.18);
+      --success: #16a34a;
+      --warning: #FFC629;
+      --orange: #f97316;
+      --danger: #dc2626;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-500: #64748b;
+      --gray-700: #334155;
+      --gray-900: #0f172a;
+      --bg: #F7F6FA;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --text: #1D1934;
+      --muted: #64748b;
+      --border: #e3e8f0;
+      --shadow: 0 10px 30px rgba(15, 23, 42, .08);
+      --sidebar-width: 270px;
+      --sidebar-collapsed: 78px;
+      --radius: 14px;
+      --transition: .22s ease;
+    }
+
+    html[data-theme="dark"] {
+      --bg: #0b1120;
+      --surface: #121a2b;
+      --surface-2: #182236;
+      --text: #e8eef8;
+      --muted: #9aa8bd;
+      --border: #26344d;
+      --gray-50: #0f172a;
+      --gray-100: #172033;
+      --gray-200: #26344d;
+      --gray-300: #3a4860;
+      --gray-500: #94a3b8;
+      --gray-700: #cbd5e1;
+      --gray-900: #f8fafc;
+      --primary-soft: rgba(255, 198, 41, .18);
+      --shadow: 0 14px 36px rgba(0, 0, 0, .28);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    .hidden { display: none !important; }
+    /* Controle de acesso: recursos administrativos ficam ocultos por padrão.
+       O auth.js define data-user-role="administrador" somente após validar o perfil no Supabase. */
+    body:not([data-user-role="administrador"]) [data-admin-only],
+    body:not([data-user-role="administrador"]) .action-delete {
+      display: none !important;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    .app { min-height: 100vh; }
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0;
+      width: var(--sidebar-width);
+      background: linear-gradient(180deg, #1D1934 0%, #100D22 100%);
+      color: #fff;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      transition: width var(--transition), transform var(--transition);
+      box-shadow: 12px 0 30px rgba(29,25,52,.16);
+    }
+    .sidebar.collapsed { width: var(--sidebar-collapsed); }
+    .brand {
+      height: 76px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+      overflow: hidden;
+    }
+    .brand-logo {
+      width: 42px; height: 42px; border-radius: 12px;
+      display: grid; place-items: center; flex: 0 0 auto;
+      background: linear-gradient(135deg, #FFC629, #FFD86B);
+      color: #1D1934;
+      box-shadow: 0 8px 22px rgba(255,198,41,.28);
+      font-size: 20px;
+    }
+    .brand-text { white-space: nowrap; transition: opacity var(--transition); }
+    .brand-text strong { display: block; font-size: 15px; }
+    .brand-text span { display: block; font-size: 11px; opacity: .72; margin-top: 2px; }
+    .sidebar.collapsed .brand-text,
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-footer-text { opacity: 0; pointer-events: none; width: 0; }
+    .nav { padding: 18px 12px; display: grid; gap: 7px; flex: 1; overflow-y: auto; }
+    .nav-section-title {
+      padding: 8px 12px 4px; font-size: 10px; text-transform: uppercase;
+      letter-spacing: .12em; color: rgba(255,255,255,.5); white-space: nowrap;
+    }
+    .sidebar.collapsed .nav-section-title { color: transparent; }
+    .nav-item {
+      border: 0; color: rgba(255,255,255,.78); background: transparent;
+      min-height: 46px; width: 100%; border-radius: 11px;
+      display: flex; align-items: center; gap: 13px; padding: 0 14px;
+      transition: background var(--transition), color var(--transition), transform var(--transition);
+      text-align: left;
+    }
+    .nav-item i { width: 22px; text-align: center; font-size: 17px; flex: 0 0 auto; }
+    .nav-item:hover { background: rgba(255,255,255,.09); color: #fff; transform: translateX(2px); }
+    .nav-item.active { background: rgba(255,255,255,.16); color: #fff; box-shadow: inset 3px 0 0 #FFC629; }
+    .nav-label { white-space: nowrap; transition: opacity var(--transition); }
+    .sidebar-footer { padding: 14px; border-top: 1px solid rgba(255,255,255,.12); }
+    .sidebar-footer-card {
+      display: flex; align-items: center; gap: 10px; padding: 10px;
+      background: rgba(255,255,255,.08); border-radius: 12px; overflow: hidden;
+    }
+    .sidebar-footer-card i { width: 24px; text-align: center; flex: 0 0 auto; }
+    .sidebar-footer-text { font-size: 11px; line-height: 1.35; opacity: .8; white-space: nowrap; }
+
+    .main-shell { margin-left: var(--sidebar-width); min-height: 100vh; transition: margin-left var(--transition); }
+    .sidebar.collapsed ~ .main-shell { margin-left: var(--sidebar-collapsed); }
+    .topbar {
+      position: sticky; top: 0; z-index: 900;
+      min-height: 76px; padding: 12px 24px;
+      display: flex; align-items: center; gap: 16px;
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .icon-btn {
+      width: 42px; height: 42px; border-radius: 11px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); display: grid; place-items: center;
+      transition: all var(--transition); position: relative;
+    }
+    .icon-btn:hover { color: var(--primary); border-color: var(--primary); transform: translateY(-1px); }
+    .topbar-heading { min-width: 0; }
+    .topbar-heading h1 { margin: 0; font-size: clamp(18px, 2.2vw, 24px); }
+    .topbar-heading p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .topbar-spacer { flex: 1; }
+    .topbar-search {
+      width: min(360px, 35vw); position: relative;
+    }
+    .topbar-search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+    .topbar-search input { padding-left: 40px; }
+    .notification-badge {
+      position: absolute; top: -6px; right: -5px; min-width: 20px; height: 20px;
+      border-radius: 99px; background: var(--danger); color: #fff; font-size: 10px;
+      display: grid; place-items: center; padding: 0 5px; border: 2px solid var(--surface);
+    }
+    .notification-popover {
+      position: absolute; top: 64px; right: 76px; width: min(390px, calc(100vw - 24px));
+      max-height: 480px; overflow: auto; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; box-shadow: var(--shadow); padding: 12px; z-index: 1200;
+    }
+    .popover-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px 10px; }
+    .popover-head h3 { margin: 0; font-size: 15px; }
+    .alert-item { display: flex; gap: 10px; padding: 11px; border-radius: 10px; background: var(--surface-2); margin-bottom: 7px; }
+    .alert-item i { margin-top: 2px; }
+    .alert-item strong { display: block; font-size: 13px; }
+    .alert-item small { color: var(--muted); display: block; margin-top: 3px; }
+
+    .content { padding: 24px; }
+    .panel { display: none; animation: fadeIn .28s ease; }
+    .panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .panel-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px;
+    }
+    .panel-header h2 { margin: 0; font-size: 22px; }
+    .panel-header p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .panel-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+
+    .btn {
+      border: 0; border-radius: 10px; min-height: 40px; padding: 0 14px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 650; font-size: 13px; transition: all var(--transition); text-decoration: none;
+    }
+    .btn:hover { transform: translateY(-1px); filter: brightness(.98); }
+    .btn:active { transform: translateY(0); }
+    .btn-primary { background: var(--brand-yellow); color: var(--brand-purple); box-shadow: 0 7px 18px rgba(255,198,41,.28); }
+    .btn-primary:hover { background: #E9B000; color: var(--brand-purple); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-warning { background: var(--orange); color: #fff; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-soft { background: var(--primary-soft); color: var(--primary); }
+    .btn-sm { min-height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; }
+    .btn-icon { width: 34px; min-width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 8px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 18px;
+    }
+    .metrics-grid {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px;
+    }
+    .metric-card { position: relative; overflow: hidden; min-height: 122px; }
+    .metric-card::after {
+      content: ""; position: absolute; width: 80px; height: 80px; border-radius: 50%;
+      right: -24px; bottom: -24px; background: currentColor; opacity: .06;
+    }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .metric-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); }
+    .metric-card[data-tone="success"] .metric-icon { color: var(--success); background: rgba(22,163,74,.12); }
+    .metric-card[data-tone="warning"] .metric-icon { color: var(--warning); background: rgba(217,162,0,.13); }
+    .metric-card[data-tone="danger"] .metric-icon { color: var(--danger); background: rgba(220,38,38,.11); }
+    .metric-card[data-tone="orange"] .metric-icon { color: var(--orange); background: rgba(249,115,22,.12); }
+    .metric-value { font-size: 27px; font-weight: 800; margin-top: 11px; line-height: 1; }
+    .metric-label { color: var(--muted); font-size: 12px; margin-top: 7px; }
+
+    .dashboard-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .dashboard-grid.equal { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .chart-card { min-height: 340px; }
+    .chart-card canvas { max-height: 270px; }
+    .card-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .card-title h3 { margin: 0; font-size: 15px; }
+    .card-title span { color: var(--muted); font-size: 11px; }
+    .list-clean { list-style: none; margin: 0; padding: 0; }
+    .list-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .list-row:last-child { border-bottom: 0; }
+    .list-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); flex: 0 0 auto; }
+    .list-main { min-width: 0; flex: 1; }
+    .list-main strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .list-main small { color: var(--muted); display: block; margin-top: 3px; }
+    .list-side { text-align: right; font-size: 12px; color: var(--muted); }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .search-box { min-width: 240px; flex: 1; position: relative; }
+    .search-box i { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+    .search-box input { padding-left: 38px; }
+    .form-control {
+      width: 100%; min-height: 40px; padding: 9px 11px; color: var(--text);
+      background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+      outline: none; transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(29,25,52,.13); }
+    .form-control.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.1); }
+    textarea.form-control { min-height: 92px; resize: vertical; }
+    select.form-control { cursor: pointer; }
+    .filters-card { margin-bottom: 14px; }
+    .filters-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .field label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; }
+    .field label .required { color: var(--danger); }
+    .field-hint { display: block; margin-top: 5px; font-size: 10px; color: var(--muted); }
+    .filters-actions { display: flex; align-items: end; gap: 8px; }
+
+    .table-card { padding: 0; overflow: hidden; }
+    .table-meta { padding: 13px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .table-meta span { font-size: 12px; color: var(--muted); }
+    .table-wrap { overflow: auto; max-height: 62vh; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1900px; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 12px; vertical-align: middle; text-align: left; }
+    th {
+      position: sticky; top: 0; z-index: 3; background: var(--surface-2); color: var(--gray-700);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .025em; white-space: nowrap;
+      cursor: pointer; user-select: none;
+    }
+    th:hover { color: var(--primary); }
+    td { white-space: nowrap; }
+    tbody tr { transition: background var(--transition); }
+    tbody tr:hover { background: var(--primary-soft); }
+    .td-truncate { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .actions-cell { display: flex; gap: 5px; }
+    .pagination-bar { padding: 13px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .pagination-controls { display: flex; gap: 6px; align-items: center; }
+    .page-btn { min-width: 34px; height: 34px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; }
+    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .page-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 99px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .badge-success { background: rgba(22,163,74,.12); color: #15803d; }
+    .badge-warning { background: rgba(234,179,8,.16); color: #a16207; }
+    .badge-orange { background: rgba(249,115,22,.14); color: #c2410c; }
+    .badge-danger { background: rgba(220,38,38,.12); color: #b91c1c; }
+    .badge-muted { background: var(--gray-100); color: var(--muted); }
+    .badge-blue { background: var(--primary-soft); color: var(--primary); }
+    html[data-theme="dark"] .badge-success { color: #86efac; }
+    html[data-theme="dark"] .badge-warning { color: #fde047; }
+    html[data-theme="dark"] .badge-orange { color: #fdba74; }
+    html[data-theme="dark"] .badge-danger { color: #fca5a5; }
+
+    .kanban-wrap { overflow-x: auto; padding-bottom: 12px; }
+    .kanban { display: grid; grid-template-columns: repeat(8, minmax(270px, 1fr)); gap: 12px; min-width: 2240px; align-items: start; }
+    .kanban-column { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; min-height: 470px; padding: 10px; }
+    .kanban-column.drag-over { outline: 2px dashed var(--primary); background: var(--primary-soft); }
+    .kanban-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 4px 12px; }
+    .kanban-head strong { font-size: 12px; }
+    .kanban-count { min-width: 24px; height: 24px; display: grid; place-items: center; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); font-size: 10px; }
+    .kanban-list { display: grid; gap: 10px; }
+    .kanban-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px; box-shadow: 0 5px 14px rgba(15,23,42,.06); cursor: grab;
+    }
+    .kanban-card:active { cursor: grabbing; }
+    .kanban-card h4 { margin: 0 0 4px; font-size: 13px; }
+    .kanban-card .company-name { color: var(--muted); font-size: 11px; margin-bottom: 9px; }
+    .kanban-info { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; font-size: 10px; color: var(--muted); }
+    .kanban-info strong { color: var(--text); display: block; font-size: 10px; margin-top: 2px; }
+    .kanban-footer { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+    .contact-layout { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+    .contact-company-list { max-height: 70vh; overflow: auto; }
+    .contact-company-item { padding: 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all var(--transition); }
+    .contact-company-item:hover, .contact-company-item.active { border-color: var(--primary); background: var(--primary-soft); }
+    .contact-company-item strong { display: block; font-size: 13px; }
+    .contact-company-item small { color: var(--muted); }
+    .timeline { position: relative; padding-left: 22px; }
+    .timeline::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+    .timeline-item { position: relative; padding: 0 0 18px 18px; }
+    .timeline-item::before { content: ""; position: absolute; left: -20px; top: 4px; width: 11px; height: 11px; border-radius: 50%; background: var(--primary); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--primary); }
+    .timeline-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 11px; padding: 12px; }
+    .timeline-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .timeline-head strong { font-size: 12px; }
+    .timeline-head span { color: var(--muted); font-size: 10px; }
+    .timeline-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; font-size: 11px; }
+    .timeline-grid span { color: var(--muted); }
+    .timeline-notes { margin-top: 9px; font-size: 11px; line-height: 1.5; }
+
+    .report-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin-bottom: 16px; }
+    .report-table { min-width: 100%; }
+    .report-table th { position: static; }
+
+    .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .setting-row:last-child { border-bottom: 0; }
+    .setting-row strong { display: block; font-size: 13px; }
+    .setting-row small { color: var(--muted); display: block; margin-top: 3px; }
+
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(2,6,23,.62); z-index: 2000;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      opacity: 0; pointer-events: none; transition: opacity var(--transition);
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      width: min(920px, 100%); max-height: 92vh; overflow: hidden;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 17px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.35); transform: translateY(12px) scale(.99);
+      transition: transform var(--transition); display: flex; flex-direction: column;
+    }
+    .modal-backdrop.open .modal { transform: translateY(0) scale(1); }
+    .modal.sm { width: min(520px, 100%); }
+    .modal.lg { width: min(1100px, 100%); }
+    .modal-header { padding: 17px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
+    .modal-header h3 { margin: 0; font-size: 17px; }
+    .modal-body { padding: 20px; overflow: auto; }
+    .modal-footer { padding: 14px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); }
+    .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .span-2 { grid-column: span 2; }
+    .span-3 { grid-column: span 3; }
+    .checkbox-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+    .check-option { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; font-size: 11px; }
+    .check-option input { accent-color: var(--primary); }
+    .summary-box { padding: 12px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 10px; font-size: 12px; }
+    .summary-box strong { color: var(--primary); }
+    .detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+    .detail-item { padding: 11px; background: var(--surface-2); border-radius: 9px; }
+    .detail-item span { display: block; color: var(--muted); font-size: 10px; margin-bottom: 4px; }
+    .detail-item strong { font-size: 12px; word-break: break-word; }
+    .import-preview { overflow: auto; max-height: 330px; border: 1px solid var(--border); border-radius: 10px; }
+    .import-preview table { min-width: 900px; }
+    .import-preview th { position: sticky; }
+
+    .toast-container { position: fixed; right: 18px; bottom: 18px; z-index: 3000; display: grid; gap: 10px; width: min(370px, calc(100vw - 36px)); }
+    .toast { display: flex; align-items: flex-start; gap: 10px; padding: 13px 14px; color: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.22); animation: toastIn .25s ease; }
+    .toast.success { background: #15803d; }
+    .toast.error { background: #b91c1c; }
+    .toast.info { background: #1d4ed8; }
+    .toast.warning { background: #c2410c; }
+    .toast strong { display: block; font-size: 12px; }
+    .toast span { display: block; margin-top: 2px; font-size: 11px; opacity: .9; }
+    @keyframes toastIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    .empty-state { padding: 34px 18px; text-align: center; color: var(--muted); }
+    .empty-state i { font-size: 32px; opacity: .5; margin-bottom: 10px; }
+    .empty-state strong { display: block; color: var(--text); margin-bottom: 4px; }
+
+    @media (max-width: 1200px) {
+      .metrics-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .filters-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .report-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 900px) {
+      .sidebar { transform: translateX(-100%); width: var(--sidebar-width); }
+      .sidebar.mobile-open { transform: translateX(0); }
+      .sidebar.collapsed { width: var(--sidebar-width); }
+      .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-label, .sidebar.collapsed .sidebar-footer-text { opacity: 1; width: auto; }
+      .main-shell, .sidebar.collapsed ~ .main-shell { margin-left: 0; }
+      .content { padding: 18px; }
+      .topbar { padding: 10px 16px; }
+      .topbar-search { display: none; }
+      .dashboard-grid, .dashboard-grid.equal, .contact-layout, .settings-grid { grid-template-columns: 1fr; }
+      .filters-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .form-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .span-3 { grid-column: span 2; }
+      .detail-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .notification-popover { right: 16px; top: 68px; }
+    }
+    @media (max-width: 620px) {
+      .content { padding: 14px; }
+      .metrics-grid, .filters-grid, .report-grid, .form-grid, .detail-grid { grid-template-columns: 1fr; }
+      .span-2, .span-3 { grid-column: span 1; }
+      .panel-header { flex-direction: column; }
+      .panel-actions { width: 100%; }
+      .panel-actions .btn { flex: 1; }
+      .checkbox-grid { grid-template-columns: 1fr 1fr; }
+      .topbar-heading p { display: none; }
+      .topbar { gap: 9px; }
+      .table-meta, .pagination-bar { align-items: flex-start; flex-direction: column; }
+      .timeline-grid { grid-template-columns: 1fr; }
+      .modal-backdrop { padding: 8px; }
+      .modal { max-height: 96vh; border-radius: 13px; }
+    }
+
+    @media print {
+      body * { visibility: hidden !important; }
+      #panel-relatorios, #panel-relatorios * { visibility: visible !important; }
+      #panel-relatorios { position: absolute; inset: 0; display: block !important; background: #fff; color: #000; padding: 15px; }
+      #panel-relatorios .panel-actions, .sidebar, .topbar { display: none !important; }
+      .card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+    }
+
+/* ================================================================
+   Etapa 3 — Autenticação, sessão e menu do usuário
+   ================================================================ */
+body.auth-pending,
+body.auth-guest { overflow: hidden; }
+
+.app { display: none; }
+body.authenticated .app { display: block; }
+
+.auth-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  min-height: 100vh;
+  padding: 28px;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  background: linear-gradient(145deg, #100D22 0%, #1D1934 58%, #332B59 100%);
+}
+body.authenticated .auth-shell { display: none; }
+
+.auth-background { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.auth-orb { position: absolute; border-radius: 999px; filter: blur(2px); opacity: .34; }
+.auth-orb-one { width: 440px; height: 440px; top: -170px; right: -100px; background: #FFC629; }
+.auth-orb-two { width: 360px; height: 360px; bottom: -160px; left: -80px; background: #FFFFFF; }
+.auth-grid-pattern {
+  position: absolute; inset: 0; opacity: .12;
+  background-image: linear-gradient(rgba(255,255,255,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.18) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.auth-card {
+  position: relative;
+  width: min(460px, 100%);
+  padding: 30px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border: 1px solid rgba(255,255,255,.45);
+  border-radius: 22px;
+  box-shadow: 0 28px 80px rgba(0,0,0,.28);
+  backdrop-filter: blur(18px);
+  animation: authCardIn .42s ease;
+}
+@keyframes authCardIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.auth-brand-logo {
+  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
+  color: #1D1934; font-size: 21px; background: linear-gradient(135deg, #FFC629, #FFE28B);
+  box-shadow: 0 10px 24px rgba(255,198,41,.28);
+}
+.auth-brand strong { display: block; font-size: 17px; }
+.auth-brand span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+
+.auth-view h1 { margin: 0; font-size: 27px; letter-spacing: -.03em; }
+.auth-view p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.auth-heading { margin-bottom: 22px; }
+.auth-eyebrow { display: block; margin-bottom: 8px; color: var(--primary); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.auth-loading-icon { width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 18px; border-radius: 15px; color: var(--primary); background: var(--primary-soft); font-size: 22px; }
+
+.auth-field { margin-bottom: 16px; }
+.auth-field label { display: block; margin-bottom: 7px; color: var(--gray-700); font-size: 12px; font-weight: 750; }
+.auth-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.auth-input-wrap { position: relative; }
+.auth-input-wrap > i { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.auth-input-wrap input {
+  width: 100%; min-height: 46px; padding: 10px 44px 10px 40px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 11px; outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+}
+.auth-input-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(29,25,52,.13); }
+.auth-password-toggle {
+  position: absolute; top: 50%; right: 7px; transform: translateY(-50%);
+  width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+}
+.auth-password-toggle:hover { color: var(--primary); background: var(--primary-soft); }
+.auth-link, .auth-back { border: 0; padding: 0; color: var(--primary); background: transparent; font-size: 11px; font-weight: 750; }
+.auth-link:hover, .auth-back:hover { text-decoration: underline; }
+.auth-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 22px; }
+.auth-submit { width: 100%; min-height: 46px; margin-top: 4px; }
+.auth-submit:disabled { cursor: wait; opacity: .78; transform: none; }
+
+.auth-message { margin-bottom: 16px; padding: 11px 12px; border-radius: 10px; font-size: 12px; line-height: 1.45; }
+.auth-message-error { color: #991b1b; border: 1px solid rgba(220,38,38,.22); background: rgba(220,38,38,.09); }
+.auth-message-success { color: #166534; border: 1px solid rgba(22,163,74,.24); background: rgba(22,163,74,.1); }
+html[data-theme="dark"] .auth-message-error { color: #fecaca; }
+html[data-theme="dark"] .auth-message-success { color: #bbf7d0; }
+.auth-security-note { display: flex; gap: 9px; align-items: flex-start; margin-top: 18px; padding: 11px; border-radius: 10px; color: var(--muted); background: var(--surface-2); font-size: 10px; line-height: 1.45; }
+.auth-security-note i { margin-top: 2px; color: var(--success); }
+.auth-footer { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; }
+.auth-footer span { display: inline-flex; align-items: center; gap: 6px; }
+
+.user-menu { position: relative; }
+.user-menu-toggle {
+  min-height: 44px; padding: 5px 9px 5px 6px; display: flex; align-items: center; gap: 9px;
+  color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+.user-menu-toggle:hover { border-color: var(--primary); box-shadow: 0 7px 18px rgba(29,25,52,.12); transform: translateY(-1px); }
+.user-avatar {
+  width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px;
+  color: #1D1934; background: linear-gradient(135deg, #FFC629, #FFFFFF); font-size: 11px; font-weight: 850;
+}
+.user-avatar-lg { width: 42px; height: 42px; border-radius: 12px; font-size: 13px; }
+.user-menu-text { min-width: 0; text-align: left; }
+.user-menu-text strong { display: block; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.user-menu-text small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
+.user-menu-chevron { color: var(--muted); font-size: 9px; }
+.user-menu-popover {
+  position: absolute; top: calc(100% + 9px); right: 0; width: 290px; padding: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); z-index: 1300;
+}
+.user-menu-profile { display: flex; align-items: center; gap: 11px; padding: 9px; }
+.user-menu-profile strong { display: block; font-size: 12px; }
+.user-menu-profile small { display: block; max-width: 190px; margin-top: 3px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.user-menu-meta { display: flex; justify-content: space-between; gap: 12px; margin: 4px 0 8px; padding: 10px; border-radius: 9px; background: var(--surface-2); font-size: 10px; }
+.user-menu-meta span { color: var(--muted); }
+.user-menu-action { width: 100%; min-height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 11px; border: 0; border-radius: 9px; color: var(--danger); background: transparent; font-size: 11px; font-weight: 750; text-align: left; }
+.user-menu-action:hover { background: rgba(220,38,38,.08); }
+
+@media (max-width: 1080px) {
+  .user-menu-text, .user-menu-chevron { display: none; }
+  .user-menu-toggle { width: 44px; padding: 5px; justify-content: center; }
+}
+@media (max-width: 680px) {
+  .auth-shell { padding: 14px; align-items: center; }
+  .auth-card { padding: 22px; border-radius: 18px; }
+  .auth-view h1 { font-size: 23px; }
+  .topbar-search { display: none; }
+  .user-menu-popover { position: fixed; top: 68px; right: 12px; width: min(290px, calc(100vw - 24px)); }
+}
+
+/* Etapa 3.3 — sincronização com o banco online */
+body.data-loading::after {
+  content: "Sincronizando dados com o Supabase...";
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 5000;
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: var(--text, #0f172a);
+  color: var(--surface, #fff);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .24);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body.data-loading #mainApplication {
+  cursor: progress;
+}
+
+/* ========================================================================== */
+/* Etapa 4 — Auditoria                                                       */
+/* ========================================================================== */
+.audit-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.audit-metric-card {
+  min-height: 104px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.audit-metric-card .metric-icon {
+  flex: 0 0 auto;
+}
+.audit-metric-card strong {
+  display: block;
+  font-size: 25px;
+  line-height: 1;
+  color: var(--text);
+}
+.audit-metric-card span {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.audit-metric-card.metric-success .metric-icon { color: var(--success); background: rgba(22,163,74,.12); }
+.audit-metric-card.metric-warning .metric-icon { color: var(--warning); background: rgba(217,162,0,.13); }
+.audit-metric-card.metric-danger .metric-icon { color: var(--danger); background: rgba(220,38,38,.11); }
+.audit-metric-card.metric-blue .metric-icon { color: #0891b2; background: rgba(8,145,178,.12); }
+
+.audit-filters-card { margin-bottom: 16px; }
+.audit-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.6fr) repeat(5, minmax(150px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+.audit-filter-actions { display: flex; align-items: end; }
+.audit-limit-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 16px;
+}
+.audit-limit-note i { color: var(--primary); }
+
+.audit-table-wrap { max-height: 64vh; }
+.audit-table { min-width: 1180px; }
+.audit-table th:last-child,
+.audit-table td:last-child { width: 110px; }
+.audit-table td { white-space: normal; }
+.audit-table small,
+.audit-user small,
+.audit-date-cell small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.audit-date-cell strong { white-space: nowrap; }
+.audit-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 200px;
+}
+.audit-user-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+.audit-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.audit-action-create { color: #15803d; background: rgba(22,163,74,.12); }
+.audit-action-update { color: #1D1934; background: rgba(29,25,52,.12); }
+.audit-action-status { color: #7c3aed; background: rgba(124,58,237,.12); }
+.audit-action-delete { color: #b91c1c; background: rgba(220,38,38,.12); }
+.audit-summary {
+  display: block;
+  max-width: 440px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.audit-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+#auditTableCard { position: relative; }
+#auditTableCard.audit-is-loading { min-height: 260px; }
+
+.pagination {
+  padding: 13px 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+}
+.pagination-btn {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  transition: var(--transition);
+}
+.pagination-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.pagination-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pagination-btn:disabled { opacity: .42; cursor: not-allowed; }
+
+.modal.xl { width: min(1280px, 100%); }
+.modal-subtitle { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.audit-detail-modal .modal-body { display: grid; gap: 17px; }
+.audit-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.audit-detail-meta > div {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.audit-detail-meta span,
+.audit-detail-meta small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.audit-detail-meta strong { display: block; margin-top: 5px; font-size: 12px; overflow-wrap: anywhere; }
+.audit-detail-summary { display: flex; align-items: flex-start; gap: 9px; }
+.audit-detail-summary i { color: var(--primary); margin-top: 2px; }
+.audit-changes-title { margin: 0; }
+.audit-changes-wrap { max-height: 390px; border: 1px solid var(--border); border-radius: 10px; }
+.audit-changes-table { min-width: 760px; }
+.audit-changes-table th { cursor: default; }
+.audit-value {
+  min-width: 220px;
+  max-width: 440px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.audit-value-before { background: rgba(220,38,38,.07); }
+.audit-value-after { background: rgba(22,163,74,.08); }
+.audit-raw-details {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.audit-raw-details summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--text);
+}
+.audit-raw-details summary i { margin-right: 7px; color: var(--primary); }
+.audit-raw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+.audit-raw-grid strong { display: block; margin-bottom: 7px; font-size: 11px; }
+.audit-raw-grid pre {
+  max-height: 310px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--gray-900);
+  color: #e2e8f0;
+  font: 11px/1.55 Consolas, Monaco, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1380px) {
+  .audit-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .audit-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .audit-search-field { grid-column: span 2; }
+}
+@media (max-width: 900px) {
+  .audit-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .audit-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .audit-search-field { grid-column: 1 / -1; }
+  .audit-detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .audit-metrics,
+  .audit-filter-grid,
+  .audit-detail-meta,
+  .audit-raw-grid { grid-template-columns: 1fr; }
+  .audit-search-field { grid-column: auto; }
+  .audit-filter-actions .btn { width: 100%; }
+  .audit-metric-card { min-height: 88px; }
+  .pagination { justify-content: center; }
+}
+
+/* ========================================================================== 
+   Etapa 5 — Central de notificações
+   ========================================================================== */
+.notification-popover {
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 90px));
+  overflow: hidden;
+  padding: 0;
+}
+.notification-popover-head {
+  padding: 15px 16px 11px;
+  border-bottom: 1px solid var(--border);
+}
+.notification-popover-head > div { min-width: 0; }
+.notification-popover-head span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.notification-close-btn { width: 34px; height: 34px; border-radius: 9px; }
+.notification-popover-actions {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.notification-popover-actions .btn { width: 100%; justify-content: center; }
+.notification-popover-list {
+  max-height: 430px;
+  overflow-y: auto;
+  padding: 10px;
+}
+.notification-mini-item {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 7px;
+  padding: 11px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  transition: var(--transition);
+}
+.notification-mini-item:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  transform: translateY(-1px);
+}
+.notification-mini-item.is-unread { background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); }
+.notification-mini-icon,
+.notification-card-icon {
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.notification-mini-icon { width: 38px; height: 38px; }
+.notification-mini-content { min-width: 0; }
+.notification-mini-content strong {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.notification-mini-content small {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.notification-mini-content > span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.notification-unread-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.notification-more {
+  padding: 7px 9px 3px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+.notification-open-center {
+  width: 100%;
+  min-height: 43px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+}
+.notification-open-center:hover { background: var(--primary-soft); }
+.notification-open-center i { margin-right: 7px; }
+.notification-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 18px;
+  color: var(--muted);
+  text-align: center;
+}
+.notification-empty i { color: var(--success); font-size: 28px; }
+.notification-empty strong { color: var(--text); font-size: 13px; }
+.notification-empty span { max-width: 340px; font-size: 10px; line-height: 1.5; }
+
+.notification-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.notification-metric {
+  min-height: 98px;
+  padding: 17px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.notification-metric-icon {
+  width: 45px;
+  height: 45px;
+  flex: 0 0 45px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 17px;
+}
+.notification-metric strong {
+  display: block;
+  font-size: 25px;
+  line-height: 1;
+}
+.notification-metric span:not(.notification-metric-icon) {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.notification-metric.metric-danger .notification-metric-icon { color: var(--danger); background: rgba(220,38,38,.11); }
+.notification-metric.metric-warning .notification-metric-icon { color: var(--warning); background: rgba(217,162,0,.13); }
+.notification-metric.metric-orange .notification-metric-icon { color: var(--orange); background: rgba(249,115,22,.12); }
+.notification-metric.metric-blue .notification-metric-icon { color: #0891b2; background: rgba(8,145,178,.12); }
+
+.notification-filter-card { margin-bottom: 16px; }
+.notification-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.7fr) repeat(3, minmax(150px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+.notification-filter-actions { display: flex; align-items: end; }
+.notification-center-card { overflow: hidden; }
+.notification-center-card > .card-title { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.notification-center-list { display: grid; gap: 10px; padding: 14px; }
+.notification-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 14px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 13px;
+  background: var(--surface);
+  transition: var(--transition);
+}
+.notification-card:hover { box-shadow: 0 9px 25px rgba(15,23,42,.07); transform: translateY(-1px); }
+.notification-card.is-read { opacity: .84; }
+.notification-card.is-inactive { opacity: .66; background: var(--surface-2); }
+.notification-card.priority-critica { border-left-color: var(--danger); }
+.notification-card.priority-alta { border-left-color: var(--orange); }
+.notification-card.priority-media { border-left-color: var(--warning); }
+.notification-card.priority-baixa { border-left-color: var(--gray-500); }
+.notification-card-icon { width: 52px; height: 52px; font-size: 18px; }
+.priority-critica .notification-card-icon,
+.notification-mini-item.priority-critica .notification-mini-icon { color: var(--danger); background: rgba(220,38,38,.08); }
+.priority-alta .notification-card-icon,
+.notification-mini-item.priority-alta .notification-mini-icon { color: var(--orange); background: rgba(249,115,22,.09); }
+.priority-media .notification-card-icon,
+.notification-mini-item.priority-media .notification-mini-icon { color: var(--warning); background: rgba(217,162,0,.09); }
+.priority-baixa .notification-card-icon,
+.notification-mini-item.priority-baixa .notification-mini-icon { color: var(--muted); }
+.notification-card-main { min-width: 0; }
+.notification-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.notification-card-heading h3 { margin: 7px 0 0; font-size: 14px; line-height: 1.35; }
+.notification-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.notification-priority,
+.notification-read-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.notification-priority.priority-critica { color: #b91c1c; background: rgba(220,38,38,.12); }
+.notification-priority.priority-alta { color: #c2410c; background: rgba(249,115,22,.12); }
+.notification-priority.priority-media { color: #927000; background: rgba(217,162,0,.13); }
+.notification-priority.priority-baixa { color: var(--muted); background: var(--surface-2); }
+.notification-read-status { color: var(--muted); background: var(--surface-2); }
+.notification-card p { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.notification-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 11px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.notification-card-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.notification-card-meta i { color: var(--primary); }
+.notification-card-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+.btn-ghost-danger {
+  border: 1px solid rgba(220,38,38,.2);
+  background: rgba(220,38,38,.06);
+  color: var(--danger);
+}
+.btn-ghost-danger:hover { border-color: var(--danger); background: rgba(220,38,38,.12); }
+.notification-empty-panel { min-height: 260px; align-content: center; }
+.notification-empty-panel i { color: var(--muted); }
+
+@media (max-width: 1380px) {
+  .notification-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .notification-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .notification-search-field { grid-column: span 2; }
+}
+@media (max-width: 900px) {
+  .notification-popover { right: 14px; top: 68px; }
+  .notification-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .notification-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .notification-search-field { grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+  .notification-metrics,
+  .notification-filter-grid { grid-template-columns: 1fr; }
+  .notification-search-field { grid-column: auto; }
+  .notification-filter-actions .btn { width: 100%; }
+  .notification-card { grid-template-columns: 42px minmax(0, 1fr); padding: 12px; }
+  .notification-card-icon { width: 42px; height: 42px; }
+  .notification-card-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ================================================================
+   Etapa 6 — Gestão de usuários
+   ================================================================ */
+.user-metrics{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:18px}
+.user-metric-card{min-height:118px}
+.user-toolbar-card{margin-bottom:14px}
+.user-toolbar{display:grid;grid-template-columns:minmax(280px,2fr) minmax(170px,.75fr) minmax(170px,.75fr) auto;gap:12px;align-items:end}
+.user-search-field{min-width:0}
+.user-toolbar-actions{display:flex;align-items:flex-end;padding-bottom:1px}
+.user-security-note{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.user-security-note>i{color:var(--primary);font-size:18px}
+.user-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;color:var(--muted)}
+.user-table-wrap{min-height:250px}
+.user-table{width:100%;border-collapse:separate;border-spacing:0}
+.user-table th,.user-table td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+.user-table th{position:sticky;top:0;z-index:2;background:var(--surface-2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.user-cell{display:flex;align-items:center;gap:10px;min-width:245px}
+.user-cell>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.user-cell strong{display:block;color:var(--text)}
+.user-cell small{display:block;color:var(--muted);max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.user-table-avatar{width:38px;height:38px;min-width:38px;font-size:12px}
+.you-label{display:inline-flex!important;width:auto!important;margin-left:5px;padding:2px 6px;border-radius:999px;background:var(--primary-soft);color:var(--primary)!important;font-size:10px!important;font-weight:700;vertical-align:middle}
+.user-actions{display:flex;gap:5px;justify-content:flex-end}
+.action-btn.warning{color:#b45309;background:rgba(245,158,11,.12)}
+.action-btn.success{color:#15803d;background:rgba(34,197,94,.12)}
+.action-btn.danger{color:#dc2626;background:rgba(239,68,68,.1)}
+.action-btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+.user-form-grid .user-active-field{display:flex;flex-direction:column;justify-content:flex-end}
+.switch-row{display:flex!important;align-items:center;gap:10px;min-height:43px;cursor:pointer;font-weight:600!important;color:var(--text)!important}
+.switch-row input{position:absolute;opacity:0;pointer-events:none}
+.switch-control{position:relative;width:44px;height:24px;border-radius:999px;background:var(--border-strong);transition:.2s}
+.switch-control::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.22);transition:.2s}
+.switch-row input:checked+.switch-control{background:var(--success)}
+.switch-row input:checked+.switch-control::after{transform:translateX(20px)}
+.switch-row input:focus-visible+.switch-control{outline:3px solid var(--primary-soft);outline-offset:2px}
+
+@media (max-width:1100px){
+  .user-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .user-toolbar{grid-template-columns:1fr 1fr}
+  .user-search-field{grid-column:1/-1}
+}
+@media (max-width:650px){
+  .user-metrics{grid-template-columns:1fr}
+  .user-toolbar{grid-template-columns:1fr}
+  .user-search-field{grid-column:auto}
+  .user-toolbar-actions .btn{width:100%}
+  .user-form-grid{grid-template-columns:1fr!important}
+  .user-form-grid .span-2,.user-form-grid .span-3{grid-column:auto!important}
+}
+
+
+/* ========================================================================
+   Etapa 7 — Identidade visual, cadastro inteligente e importação avançada
+   Paleta institucional: Roxo #1D1934, Amarelo #FFC629 e Branco #FFFFFF
+   ======================================================================== */
+html[data-theme="dark"] {
+  --primary: #FFC629;
+  --primary-dark: #E9B000;
+  --primary-soft: rgba(255,198,41,.16);
+  --accent-soft: rgba(255,198,41,.14);
+}
+
+.nav-item.active { color: #FFFFFF; background: rgba(255,198,41,.14); }
+.nav-item.active i { color: #FFC629; }
+.btn-soft { background: var(--accent-soft); color: var(--brand-purple); }
+html[data-theme="dark"] .btn-soft { color: #FFC629; }
+.check-option input,
+.switch-row input { accent-color: #FFC629; }
+.notification-badge { background: #FFC629; color: #1D1934; font-weight: 850; }
+.list-dot { background: #FFC629; }
+.icon-btn:hover { color: var(--primary); border-color: #FFC629; }
+
+.company-modal { max-height: 94vh; }
+.company-modal form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.company-modal-body {
+  max-height: calc(94vh - 154px);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #FFC629 var(--surface-2);
+}
+.company-modal-body::-webkit-scrollbar { width: 10px; }
+.company-modal-body::-webkit-scrollbar-track { background: var(--surface-2); border-radius: 999px; }
+.company-modal-body::-webkit-scrollbar-thumb { background: #FFC629; border: 2px solid var(--surface-2); border-radius: 999px; }
+.company-modal-footer { align-items: center; justify-content: space-between; background: var(--surface); }
+.modal-footer-note { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; }
+.modal-footer-note i { color: #FFC629; }
+.modal-footer-actions { display: flex; gap: 8px; }
+
+.form-section-title {
+  display: flex; align-items: center; gap: 9px; margin-top: 4px; padding: 10px 12px;
+  color: #1D1934; background: rgba(255,198,41,.18); border-left: 4px solid #FFC629;
+  border-radius: 9px; font-size: 12px; font-weight: 850; letter-spacing: .02em;
+}
+html[data-theme="dark"] .form-section-title { color: #FFFFFF; background: rgba(255,198,41,.12); }
+.cnpj-input-wrap { position: relative; }
+.cnpj-input-wrap .form-control { padding-right: 39px; }
+.cnpj-spinner { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: #FFC629; }
+#cnpjLookupStatus.is-loading { color: var(--primary); font-weight: 700; }
+#cnpjLookupStatus.is-success { color: var(--success); font-weight: 700; }
+#cnpjLookupStatus.is-error { color: var(--danger); font-weight: 700; }
+.api-fill-field.api-autofilled { border-color: #FFC629; background: rgba(255,198,41,.10); }
+.api-fill-field.api-manual-edited { border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); }
+.cnpj-source-box {
+  display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px;
+  background: rgba(255,198,41,.12); border: 1px solid rgba(255,198,41,.55); border-radius: 10px;
+  color: var(--text); font-size: 11px; line-height: 1.5;
+}
+.cnpj-source-box i { color: #C18B00; margin-top: 2px; }
+
+.import-modal .modal-body { display: grid; gap: 14px; }
+.import-top-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.import-file-name { flex: 1; min-width: 220px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-options-card {
+  display: grid; grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.2fr); gap: 14px;
+  padding: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+}
+.import-enrich-option { align-self: end; min-height: 42px; }
+.import-enrich-option > span:last-child { display: grid; gap: 2px; }
+.import-enrich-option strong { font-size: 11px; }
+.import-enrich-option small { color: var(--muted); font-size: 9px; font-weight: 500; }
+.import-summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 9px; }
+.import-summary-card { padding: 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.import-summary-card strong { display: block; color: var(--text); font-size: 20px; }
+.import-summary-card span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.import-summary-card.is-valid strong { color: var(--success); }
+.import-summary-card.is-warning strong { color: #B77900; }
+.import-summary-card.is-error strong { color: var(--danger); }
+.import-progress { display: grid; gap: 7px; padding: 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.import-progress-track { height: 8px; overflow: hidden; border-radius: 99px; background: var(--gray-200); }
+.import-progress-track span { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #1D1934, #FFC629); transition: width .2s ease; }
+.import-progress strong { font-size: 10px; color: var(--muted); }
+.import-preview { max-height: 420px; }
+.import-preview table { min-width: 1320px; }
+.import-preview th { top: 0; z-index: 2; }
+.import-row-status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 999px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.import-row-status.valid { color: #166534; background: rgba(22,163,74,.12); }
+.import-row-status.warning { color: #8A6100; background: rgba(255,198,41,.18); }
+.import-row-status.error { color: #991B1B; background: rgba(220,38,38,.10); }
+.import-modal-footer { align-items: center; }
+.modal-footer-spacer { flex: 1; }
+
+.audit-table-meta > div { display: flex; align-items: center; gap: 10px; }
+.audit-table-meta small { color: var(--muted); font-size: 10px; }
+.audit-select-cell { width: 44px !important; text-align: center; }
+.audit-select-cell input,
+.audit-row-select { width: 16px; height: 16px; accent-color: #FFC629; }
+.audit-row-actions { display: flex; gap: 6px; }
+.audit-delete-warning { display: flex; gap: 9px; margin-bottom: 14px; border-color: rgba(220,38,38,.26); background: rgba(220,38,38,.06); }
+.audit-delete-warning i { color: var(--danger); margin-top: 2px; }
+#auditDeleteSelectedBtn span { min-width: 18px; padding: 2px 5px; border-radius: 99px; background: rgba(255,255,255,.2); }
+.audit-protected { color: var(--muted); font-size: 9px; }
+
+.notification-mini-item {
+  width: 100%; grid-template-columns: 38px minmax(0,1fr) 34px; align-items: start;
+}
+.notification-mini-open {
+  min-width: 0; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer;
+}
+.notification-mini-read {
+  width: 32px; height: 32px; display: grid; place-items: center; align-self: center;
+  border: 1px solid var(--border); border-radius: 8px; color: var(--primary); background: var(--surface);
+}
+.notification-mini-read:hover { color: #1D1934; border-color: #FFC629; background: rgba(255,198,41,.18); }
+html[data-theme="dark"] .notification-mini-read:hover { color: #FFC629; }
+
+@media (max-width: 900px) {
+  .import-summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .import-options-card { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .company-modal-footer { align-items: stretch; flex-direction: column; }
+  .modal-footer-actions { width: 100%; }
+  .modal-footer-actions .btn { flex: 1; }
+  .import-summary-grid { grid-template-columns: 1fr; }
+  .import-modal-footer { flex-wrap: wrap; }
+  .import-modal-footer .btn { flex: 1 1 auto; }
+}
+
+/* Ajustes finais da Etapa 7 */
+#cnpjLookupStatus.cnpj-status-loading,
+#cnpjLookupStatus.cnpj-status-pending { color: #1D1934; font-weight: 750; }
+#cnpjLookupStatus.cnpj-status-success { color: var(--success); font-weight: 750; }
+#cnpjLookupStatus.cnpj-status-warning { color: #9A6A00; font-weight: 700; }
+html[data-theme="dark"] #cnpjLookupStatus.cnpj-status-loading,
+html[data-theme="dark"] #cnpjLookupStatus.cnpj-status-pending,
+html[data-theme="dark"] #cnpjLookupStatus.cnpj-status-warning { color: #FFC629; }
+.import-preview {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.import-preview > .empty-state,
+.import-preview > .summary-box { margin: 12px; }
+.audit-row-actions { align-items: center; white-space: nowrap; }
+.audit-protected.fa-lock { font-size: 13px; }
+html[data-theme="dark"] .btn-primary { color: #1D1934; }
+html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
+
+  </style>
+  <link rel="stylesheet" href="/css/style.css?v=20260730-etapa7-visual-fix" />
+
+</head>
+<body class="auth-pending">
+
+  <section class="auth-shell" id="authShell" aria-label="Acesso ao sistema">
+    <div class="auth-background" aria-hidden="true">
+      <span class="auth-orb auth-orb-one"></span>
+      <span class="auth-orb auth-orb-two"></span>
+      <span class="auth-grid-pattern"></span>
+    </div>
+
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="auth-brand-logo"><i class="fa-solid fa-handshake"></i></div>
+        <div>
+          <strong>Convênios</strong>
+          <span>Gestão de renovações</span>
+        </div>
+      </div>
+
+      <div class="auth-view" id="authLoadingView">
+        <div class="auth-loading-icon"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+        <h1>Verificando acesso</h1>
+        <p>Aguarde enquanto validamos sua sessão com segurança.</p>
+      </div>
+
+      <form class="auth-view hidden" id="loginForm" novalidate>
+        <div class="auth-heading">
+          <span class="auth-eyebrow">ACESSO RESTRITO</span>
+          <h1>Entrar no sistema</h1>
+          <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
+        </div>
+
+        <div class="auth-message hidden" id="loginMessage" role="alert"></div>
+
+        <div class="auth-field">
+          <label for="loginEmail">E-mail</label>
+          <div class="auth-input-wrap">
+            <i class="fa-regular fa-envelope"></i>
+            <input id="loginEmail" type="email" autocomplete="username" placeholder="nome@empresa.com.br" required />
+          </div>
+        </div>
+
+        <div class="auth-field">
+          <div class="auth-label-row">
+            <label for="loginPassword">Senha</label>
+            <button type="button" class="auth-link" id="openForgotPassword">Esqueci minha senha</button>
+          </div>
+          <div class="auth-input-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
+            <button type="button" class="auth-password-toggle" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha">
+              <i class="fa-regular fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary auth-submit" id="loginSubmit" type="submit">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          Entrar
+        </button>
+
+        <div class="auth-security-note">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>Sessão protegida pelo Supabase Auth. A senha não é armazenada neste site.</span>
+        </div>
+      </form>
+
+      <form class="auth-view hidden" id="forgotPasswordForm" novalidate>
+        <button type="button" class="auth-back" id="backToLoginFromForgot"><i class="fa-solid fa-arrow-left"></i>Voltar</button>
+        <div class="auth-heading">
+          <span class="auth-eyebrow">RECUPERAÇÃO DE ACESSO</span>
+          <h1>Redefinir senha</h1>
+          <p>Informe seu e-mail para receber o link de recuperação.</p>
+        </div>
+        <div class="auth-message hidden" id="forgotMessage" role="alert"></div>
+        <div class="auth-field">
+          <label for="resetEmail">E-mail</label>
+          <div class="auth-input-wrap">
+            <i class="fa-regular fa-envelope"></i>
+            <input id="resetEmail" type="email" autocomplete="email" placeholder="nome@empresa.com.br" required />
+          </div>
+        </div>
+        <button class="btn btn-primary auth-submit" id="forgotSubmit" type="submit">
+          <i class="fa-solid fa-paper-plane"></i>
+          Enviar link de recuperação
+        </button>
+      </form>
+
+      <form class="auth-view hidden" id="newPasswordForm" novalidate>
+        <div class="auth-heading">
+          <span class="auth-eyebrow">NOVA SENHA</span>
+          <h1>Crie uma nova senha</h1>
+          <p>Use pelo menos 8 caracteres e evite senhas utilizadas em outros serviços.</p>
+        </div>
+        <div class="auth-message hidden" id="newPasswordMessage" role="alert"></div>
+        <div class="auth-field">
+          <label for="newPassword">Nova senha</label>
+          <div class="auth-input-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input id="newPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo de 8 caracteres" required />
+          </div>
+        </div>
+        <div class="auth-field">
+          <label for="confirmNewPassword">Confirmar nova senha</label>
+          <div class="auth-input-wrap">
+            <i class="fa-solid fa-lock"></i>
+            <input id="confirmNewPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Repita a nova senha" required />
+          </div>
+        </div>
+        <button class="btn btn-primary auth-submit" id="newPasswordSubmit" type="submit">
+          <i class="fa-solid fa-key"></i>
+          Salvar nova senha
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <span><i class="fa-solid fa-database"></i> Banco de dados online</span>
+        <span><i class="fa-solid fa-lock"></i> Conexão segura</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="app" id="mainApplication" aria-hidden="true">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-logo"><i class="fa-solid fa-handshake"></i></div>
+        <div class="brand-text"><strong>Convênios</strong><span>Gestão de renovações</span></div>
+      </div>
+      <nav class="nav" aria-label="Menu principal">
+        <div class="nav-section-title">Gestão</div>
+        <button class="nav-item active" data-panel="dashboard"><i class="fa-solid fa-chart-pie"></i><span class="nav-label">Dashboard</span></button>
+        <button class="nav-item" data-panel="concedentes"><i class="fa-solid fa-building"></i><span class="nav-label">Concedentes</span></button>
+        <button class="nav-item" data-panel="renovacoes"><i class="fa-solid fa-table-columns"></i><span class="nav-label">Renovações</span></button>
+        <button class="nav-item" data-panel="contatos"><i class="fa-solid fa-comments"></i><span class="nav-label">Contatos</span></button>
+        <button class="nav-item" data-panel="notificacoes"><i class="fa-solid fa-bell"></i><span class="nav-label">Notificações</span></button>
+        <button class="nav-item" data-panel="relatorios"><i class="fa-solid fa-file-lines"></i><span class="nav-label">Relatórios</span></button>
+        <div class="nav-section-title">Sistema</div>
+        <button class="nav-item" data-panel="usuarios" data-admin-only><i class="fa-solid fa-users-gear"></i><span class="nav-label">Usuários</span></button>
+        <button class="nav-item" data-panel="auditoria" data-admin-only><i class="fa-solid fa-shield-halved"></i><span class="nav-label">Auditoria</span></button>
+        <button class="nav-item" data-panel="configuracoes" data-admin-only><i class="fa-solid fa-gear"></i><span class="nav-label">Configurações</span></button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-card"><i class="fa-solid fa-database"></i><div class="sidebar-footer-text">Dados sincronizados automaticamente<br>com o Supabase</div></div>
+      </div>
+    </aside>
+
+    <div class="main-shell">
+      <header class="topbar">
+        <button class="icon-btn" id="sidebarToggle" title="Recolher ou expandir menu" aria-label="Recolher ou expandir menu"><i class="fa-solid fa-bars"></i></button>
+        <div class="topbar-heading"><h1 id="pageTitle">Dashboard</h1><p id="pageSubtitle">Visão geral dos convênios e atividades.</p></div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-search"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="globalSearch" placeholder="Pesquisar concedentes..." /></div>
+        <button class="icon-btn" id="themeToggle" title="Alternar tema" aria-label="Alternar tema"><i class="fa-solid fa-moon"></i></button>
+        <button class="icon-btn" id="notificationToggle" title="Alertas" aria-label="Abrir alertas"><i class="fa-solid fa-bell"></i><span class="notification-badge" id="alertCount">0</span></button>
+        <div class="user-menu" id="userMenu">
+          <button class="user-menu-toggle" id="userMenuToggle" type="button" aria-haspopup="true" aria-expanded="false" title="Menu do usuário">
+            <span class="user-avatar" id="authUserAvatar">U</span>
+            <span class="user-menu-text"><strong id="authUserName">Usuário</strong><small id="authUserRole">Perfil</small></span>
+            <i class="fa-solid fa-chevron-down user-menu-chevron"></i>
+          </button>
+          <div class="user-menu-popover hidden" id="userMenuPopover" role="menu">
+            <div class="user-menu-profile">
+              <span class="user-avatar user-avatar-lg" id="authUserAvatarLarge">U</span>
+              <div><strong id="authProfileName">Usuário</strong><small id="authProfileEmail">—</small></div>
+            </div>
+            <div class="user-menu-meta"><span>Perfil de acesso</span><strong id="authProfileRole">—</strong></div>
+            <button class="user-menu-action" id="logoutBtn" type="button" role="menuitem"><i class="fa-solid fa-arrow-right-from-bracket"></i>Sair do sistema</button>
+          </div>
+        </div>
+        <div class="notification-popover hidden" id="notificationPopover" aria-label="Central rápida de notificações">
+          <div class="popover-head notification-popover-head">
+            <div><h3>Notificações</h3><span id="notificationUnreadSummary">Nenhuma não lida</span></div>
+            <button class="icon-btn notification-close-btn" id="closeNotifications" type="button" aria-label="Fechar notificações"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="notification-popover-actions">
+            <button class="btn btn-sm btn-secondary" id="notificationMarkAll" type="button"><i class="fa-solid fa-check-double"></i>Marcar todas como lidas</button>
+          </div>
+          <div id="alertList" class="notification-popover-list"></div>
+          <button class="notification-open-center" id="openNotificationsPanel" type="button"><i class="fa-solid fa-list-check"></i>Ver central de notificações</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="panel active" id="panel-dashboard">
+          <div class="panel-header"><div><h2>Visão geral</h2><p>Acompanhe vigências, contatos e andamento das renovações.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Cadastrar concedente</button><button class="btn btn-secondary" data-action="export" data-admin-only><i class="fa-solid fa-file-export"></i>Exportar cadastros</button></div></div>
+          <div class="metrics-grid" id="dashboardMetrics"></div>
+          <div class="dashboard-grid">
+            <div class="card chart-card"><div class="card-title"><h3>Convênios por situação</h3><span>Atualização automática</span></div><canvas id="chartStatus"></canvas></div>
+            <div class="card chart-card"><div class="card-title"><h3>Convênios por estado</h3><span>Top 8 estados</span></div><canvas id="chartState"></canvas></div>
+          </div>
+          <div class="dashboard-grid equal">
+            <div class="card chart-card"><div class="card-title"><h3>Convênios por polo</h3><span>Distribuição atual</span></div><canvas id="chartPolo"></canvas></div>
+            <div class="card"><div class="card-title"><h3>Vencimentos mais próximos</h3><span>Prioridade de acompanhamento</span></div><ul class="list-clean" id="upcomingList"></ul></div>
+          </div>
+          <div class="card"><div class="card-title"><h3>Atividades recentes</h3><span>Últimos contatos registrados</span></div><ul class="list-clean" id="recentActivities"></ul></div>
+        </section>
+
+        <section class="panel" id="panel-concedentes">
+          <div class="panel-header"><div><h2>Concedentes</h2><p>Cadastre, filtre, atualize e acompanhe todas as empresas concedentes.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Cadastrar concedente</button><button class="btn btn-secondary" id="importBtn" data-admin-only><i class="fa-solid fa-file-import"></i>Importar planilha</button><button class="btn btn-secondary" data-action="export" data-admin-only><i class="fa-solid fa-file-export"></i>Exportar cadastros</button></div></div>
+          <div class="toolbar"><div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="tableSearch" placeholder="Pesquisar por CNPJ, empresa, cidade, polo, e-mail..." /></div><button class="btn btn-soft" id="toggleFilters"><i class="fa-solid fa-filter"></i>Filtros</button></div>
+          <div class="card filters-card" id="filtersCard">
+            <div class="filters-grid">
+              <div class="field"><label>Situação da vigência</label><select class="form-control filter" id="filterVigencia"><option value="">Todas</option></select></div>
+              <div class="field"><label>Situação do contato</label><select class="form-control filter" id="filterSituacao"><option value="">Todas</option></select></div>
+              <div class="field"><label>Estado</label><select class="form-control filter" id="filterEstado"><option value="">Todos</option></select></div>
+              <div class="field"><label>Cidade</label><select class="form-control filter" id="filterCidade"><option value="">Todas</option></select></div>
+              <div class="field"><label>Polo</label><select class="form-control filter" id="filterPolo"><option value="">Todos</option></select></div>
+              <div class="field"><label>Forma de contato</label><select class="form-control filter" id="filterForma"><option value="">Todas</option></select></div>
+              <div class="field"><label>Vigência a partir de</label><input class="form-control filter" type="date" id="filterInicio" /></div>
+              <div class="field"><label>Vigência até</label><input class="form-control filter" type="date" id="filterFim" /></div>
+              <div class="field"><label>Filtro rápido</label><select class="form-control filter" id="filterRapido"><option value="">Todos os convênios</option><option value="vencidos">Somente vencidos</option><option value="30">Vencem em até 30 dias</option><option value="60">Vencem em até 60 dias</option><option value="90">Vencem em até 90 dias</option></select></div>
+              <div class="filters-actions"><button class="btn btn-secondary" id="clearFilters"><i class="fa-solid fa-rotate-left"></i>Limpar filtros</button></div>
+            </div>
+          </div>
+          <div class="card table-card">
+            <div class="table-meta"><span id="resultCount">0 resultados</span><label>Exibir <select class="form-control" id="pageSize" style="width:auto;display:inline-block;min-height:34px;padding:5px 28px 5px 8px"><option>10</option><option>25</option><option>50</option><option>100</option></select> por página</label></div>
+            <div class="table-wrap"><table><thead><tr>
+              <th data-sort="situacaoVigencia">Situação da Vigência</th><th data-sort="cnpj">CNPJ</th><th data-sort="razaoSocial">Razão Social</th><th data-sort="nomeFantasia">Nome Fantasia</th><th data-sort="inicioVigencia">Início da Vigência</th><th data-sort="fimVigencia">Fim da Vigência</th><th data-sort="dataCadastro">Data do Cadastro</th><th data-sort="vigenciaResumo">Vigência</th><th data-sort="estado">Estado</th><th data-sort="cidade">Cidade</th><th data-sort="cep">CEP</th><th data-sort="email">E-mail</th><th data-sort="telefone">Telefone</th><th data-sort="polo">Polo</th><th data-sort="situacao">Situação</th><th data-sort="formasContato">Forma de Contato</th><th>Ações</th>
+            </tr></thead><tbody id="companiesTableBody"></tbody></table></div>
+            <div class="pagination-bar"><span id="paginationInfo"></span><div class="pagination-controls" id="paginationControls"></div></div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-renovacoes">
+          <div class="panel-header"><div><h2>Renovações</h2><p>Arraste os cartões para atualizar o estágio da renovação.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Nova concedente</button></div></div>
+          <div class="kanban-wrap"><div class="kanban" id="kanbanBoard"></div></div>
+        </section>
+
+        <section class="panel" id="panel-contatos">
+          <div class="panel-header"><div><h2>Histórico de contatos</h2><p>Consulte todos os registros e próximas ações de cada concedente.</p></div><div class="panel-actions"><button class="btn btn-primary" id="newContactGlobal"><i class="fa-solid fa-phone"></i>Registrar contato</button></div></div>
+          <div class="contact-layout">
+            <div class="card"><div class="search-box" style="margin-bottom:12px"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="contactCompanySearch" placeholder="Pesquisar concedente..." /></div><div class="contact-company-list" id="contactCompanyList"></div></div>
+            <div class="card"><div class="card-title"><div><h3 id="contactTimelineTitle">Selecione uma concedente</h3><span id="contactTimelineSubtitle">O histórico será exibido aqui.</span></div><button class="btn btn-sm btn-primary hidden" id="addContactSelected"><i class="fa-solid fa-plus"></i>Novo contato</button></div><div id="contactTimeline"></div></div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-notificacoes">
+          <div class="panel-header">
+            <div><h2>Central de notificações</h2><p>Priorize vencimentos, contatos atrasados e pendências de acompanhamento.</p></div>
+            <div class="panel-actions">
+              <button class="btn btn-secondary" id="enableBrowserNotifications" type="button"><i class="fa-regular fa-bell"></i>Ativar notificações do navegador</button>
+              <button class="btn btn-secondary" id="refreshNotifications" type="button"><i class="fa-solid fa-rotate"></i>Atualizar alertas</button>
+              <button class="btn btn-primary" id="markAllNotificationsRead" type="button"><i class="fa-solid fa-check-double"></i>Marcar todas como lidas</button>
+            </div>
+          </div>
+
+          <div class="notification-metrics" id="notificationMetrics"></div>
+
+          <div class="card notification-filter-card">
+            <div class="notification-filter-grid">
+              <div class="field notification-search-field"><label>Pesquisar</label><div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="notificationSearch" placeholder="Empresa, cidade, polo ou descrição..." /></div></div>
+              <div class="field"><label>Prioridade</label><select class="form-control" id="notificationPriorityFilter"><option value="">Todas</option><option value="critica">Crítica</option><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div>
+              <div class="field"><label>Categoria</label><select class="form-control" id="notificationCategoryFilter"><option value="">Todas</option><option value="vigencia">Vigência</option><option value="contato">Sem contato</option><option value="acompanhamento">Acompanhamento</option><option value="cadastro">Cadastro</option></select></div>
+              <div class="field"><label>Status</label><select class="form-control" id="notificationStatusFilter"><option value="active">Pendentes</option><option value="unread">Não lidas</option><option value="read">Lidas</option><option value="snoozed">Adiadas</option><option value="dismissed">Dispensadas</option><option value="all">Todas</option></select></div>
+              <div class="notification-filter-actions"><button class="btn btn-secondary" id="clearNotificationFilters" type="button"><i class="fa-solid fa-rotate-left"></i>Limpar</button></div>
+            </div>
+          </div>
+
+          <div class="card notification-center-card">
+            <div class="card-title"><div><h3>Pendências identificadas</h3><span id="notificationResultCount">0 notificações</span></div><span>Atualização automática com os dados do Supabase</span></div>
+            <div class="notification-center-list" id="notificationCenterList"></div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-relatorios">
+          <div class="panel-header"><div><h2>Relatórios</h2><p>Indicadores consolidados e distribuições dos convênios.</p></div><div class="panel-actions"><button class="btn btn-secondary" id="exportReports" data-admin-only><i class="fa-solid fa-file-csv"></i>Exportar CSV</button><button class="btn btn-secondary" id="printReports"><i class="fa-solid fa-print"></i>Imprimir</button></div></div>
+          <div class="metrics-grid" id="reportMetrics"></div>
+          <div class="report-grid">
+            <div class="card chart-card"><div class="card-title"><h3>Convênios por situação da vigência</h3></div><canvas id="reportChartVigencia"></canvas></div>
+            <div class="card chart-card"><div class="card-title"><h3>Convênios por situação do contato</h3></div><canvas id="reportChartSituacao"></canvas></div>
+            <div class="card chart-card"><div class="card-title"><h3>Vencimentos por mês</h3></div><canvas id="reportChartMes"></canvas></div>
+          </div>
+          <div class="dashboard-grid equal">
+            <div class="card"><div class="card-title"><h3>Distribuição por estado e cidade</h3></div><div class="table-wrap" style="max-height:380px"><table class="report-table"><thead><tr><th>Estado</th><th>Cidade</th><th>Total</th></tr></thead><tbody id="reportLocationBody"></tbody></table></div></div>
+            <div class="card"><div class="card-title"><h3>Distribuição por polo</h3></div><div class="table-wrap" style="max-height:380px"><table class="report-table"><thead><tr><th>Polo</th><th>Total</th><th>Participação</th></tr></thead><tbody id="reportPoloBody"></tbody></table></div></div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-usuarios" data-admin-only>
+          <div class="panel-header">
+            <div><h2>Usuários e acessos</h2><p>Cadastre, edite, bloqueie e acompanhe os acessos ao sistema.</p></div>
+            <div class="panel-actions">
+              <button class="btn btn-secondary" id="usersRefreshBtn" type="button"><i class="fa-solid fa-rotate"></i>Atualizar</button>
+              <button class="btn btn-primary" id="newUserBtn" type="button"><i class="fa-solid fa-user-plus"></i>Cadastrar usuário</button>
+            </div>
+          </div>
+          <div class="metrics-grid user-metrics" id="userMetrics"></div>
+          <div class="card user-toolbar-card">
+            <div class="user-toolbar">
+              <div class="field user-search-field"><label>Pesquisar usuário</label><div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="userSearch" placeholder="Nome, e-mail, perfil ou polo..." /></div></div>
+              <div class="field"><label>Perfil</label><select class="form-control" id="userRoleFilter"><option value="">Todos</option><option value="administrador">Administrador</option><option value="operador">Operador</option></select></div>
+              <div class="field"><label>Status</label><select class="form-control" id="userStatusFilter"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option></select></div>
+              <div class="user-toolbar-actions"><button class="btn btn-secondary" id="usersClearFilters" type="button"><i class="fa-solid fa-rotate-left"></i>Limpar filtros</button></div>
+            </div>
+          </div>
+          <div class="summary-box user-security-note"><i class="fa-solid fa-shield-halved"></i><span>As senhas nunca são exibidas. Criação, bloqueio, alteração de perfil e exclusão são validados no servidor e registrados na auditoria.</span></div>
+          <div class="card table-card">
+            <div class="user-loading hidden" id="usersLoading"><i class="fa-solid fa-circle-notch fa-spin"></i><span>Carregando usuários...</span></div>
+            <div class="table-meta"><span id="usersResultCount">0 usuários</span><span id="usersLastUpdate">Ainda não atualizado</span></div>
+            <div class="table-wrap user-table-wrap">
+              <table class="user-table">
+                <thead><tr><th>Usuário</th><th>Perfil</th><th>Polo</th><th>Status</th><th>Último acesso</th><th>Criado em</th><th>Ações</th></tr></thead>
+                <tbody id="usersTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-auditoria" data-admin-only>
+          <div class="panel-header">
+            <div><h2>Auditoria do sistema</h2><p>Acompanhe quem cadastrou, editou, movimentou ou excluiu informações.</p></div>
+            <div class="panel-actions">
+              <button class="btn btn-danger hidden" id="auditDeleteSelectedBtn" type="button"><i class="fa-solid fa-trash"></i>Excluir selecionados <span id="auditSelectedCount">0</span></button>
+              <button class="btn btn-secondary" id="auditRefreshBtn" type="button"><i class="fa-solid fa-rotate"></i>Atualizar</button>
+              <button class="btn btn-primary" id="auditExportBtn" type="button"><i class="fa-solid fa-file-csv"></i>Exportar auditoria</button>
+            </div>
+          </div>
+
+          <div class="metrics-grid audit-metrics" id="auditMetrics"></div>
+
+          <div class="card audit-filters-card">
+            <div class="audit-filter-grid">
+              <div class="field audit-search-field"><label>Pesquisar</label><div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="auditSearch" placeholder="Usuário, empresa, resumo ou campo alterado..." /></div></div>
+              <div class="field"><label>Ação</label><select class="form-control" id="auditActionFilter"><option value="">Todas</option><option value="INSERT">Cadastros</option><option value="UPDATE">Edições e movimentações</option><option value="DELETE">Exclusões</option></select></div>
+              <div class="field"><label>Tipo de registro</label><select class="form-control" id="auditEntityFilter"><option value="">Todos</option><option value="concedentes">Concedentes</option><option value="contatos">Contatos</option><option value="usuarios">Usuários</option><option value="auditoria">Comprovantes de exclusão</option></select></div>
+              <div class="field"><label>Usuário</label><select class="form-control" id="auditUserFilter"><option value="">Todos os usuários</option></select></div>
+              <div class="field"><label>Data inicial</label><input class="form-control" id="auditStartDate" type="date" /></div>
+              <div class="field"><label>Data final</label><input class="form-control" id="auditEndDate" type="date" /></div>
+              <div class="audit-filter-actions"><button class="btn btn-secondary" id="auditClearFilters" type="button"><i class="fa-solid fa-rotate-left"></i>Limpar filtros</button></div>
+            </div>
+          </div>
+
+          <div class="summary-box audit-limit-note hidden" id="auditLimitNote"><i class="fa-solid fa-circle-info"></i>Foram carregados os 2.500 registros mais recentes. Utilize os filtros ou exporte regularmente para manter consultas rápidas.</div>
+
+          <div class="card table-card" id="auditTableCard">
+            <div class="audit-loading hidden" id="auditLoading"><i class="fa-solid fa-circle-notch fa-spin"></i><span>Carregando histórico de auditoria...</span></div>
+            <div class="table-meta audit-table-meta"><div><span id="auditResultCount">0 registros</span><small id="auditSelectionSummary" class="hidden">0 selecionado(s)</small></div><label>Exibir <select class="form-control" id="auditPageSize" style="width:auto;display:inline-block;min-height:34px;padding:5px 28px 5px 8px"><option value="15">15</option><option value="30">30</option><option value="50">50</option><option value="100">100</option></select> por página</label></div>
+            <div class="table-wrap audit-table-wrap"><table class="audit-table"><thead><tr><th class="audit-select-cell"><input type="checkbox" id="auditSelectPage" aria-label="Selecionar registros desta página" /></th><th>Data e hora</th><th>Usuário</th><th>Ação</th><th>Registro</th><th>Resumo</th><th>Ações</th></tr></thead><tbody id="auditTableBody"></tbody></table></div>
+            <div class="pagination" id="auditPagination"></div>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-configuracoes" data-admin-only>
+          <div class="panel-header"><div><h2>Configurações</h2><p>Preferências, segurança dos dados e manutenção do sistema.</p></div></div>
+          <div class="settings-grid">
+            <div class="card"><div class="card-title"><h3>Aparência</h3></div><div class="setting-row"><div><strong>Tema do sistema</strong><small>Alterne entre o modo claro e escuro.</small></div><button class="btn btn-secondary" id="settingsTheme"><i class="fa-solid fa-circle-half-stroke"></i>Alternar tema</button></div></div>
+            <div class="card"><div class="card-title"><h3>Backup e restauração</h3></div><div class="setting-row"><div><strong>Criar backup</strong><small>Baixa todos os dados em formato JSON.</small></div><button class="btn btn-secondary" id="backupBtn"><i class="fa-solid fa-download"></i>Backup</button></div><div class="setting-row"><div><strong>Restaurar backup</strong><small>Substitui os dados atuais por um arquivo JSON.</small></div><button class="btn btn-secondary" id="restoreBtn"><i class="fa-solid fa-upload"></i>Restaurar</button></div></div>
+            <div class="card"><div class="card-title"><h3>Dados de demonstração</h3></div><div class="setting-row"><div><strong>Excluir registros fictícios</strong><small>Remove somente os registros marcados como demonstração.</small></div><button class="btn btn-danger" id="deleteDemoBtn"><i class="fa-solid fa-trash"></i>Excluir demonstração</button></div><div class="setting-row"><div><strong>Recriar demonstração</strong><small>Adiciona novamente os registros fictícios ausentes.</small></div><button class="btn btn-secondary" id="reloadDemoBtn"><i class="fa-solid fa-rotate"></i>Recriar dados</button></div></div>
+            <div class="card"><div class="card-title"><h3>Banco de dados online</h3></div><div class="setting-row"><div><strong>Supabase</strong><small id="databaseDetails">Banco ainda não configurado. O sistema segue no modo local.</small></div><span class="badge badge-warning" id="databaseStatus"><i class="fa-solid fa-circle-exclamation"></i>Pendente</span></div><div class="setting-row"><div><strong>Diagnóstico da conexão</strong><small>Confirma a URL, a chave pública e a instalação do esquema SQL.</small></div><button class="btn btn-secondary" id="testDatabaseBtn" type="button"><i class="fa-solid fa-plug-circle-check"></i>Testar conexão</button></div></div>
+            <div class="card"><div class="card-title"><h3>Armazenamento online</h3></div><div class="setting-row"><div><strong>Registros sincronizados</strong><small id="storageSummary">0 concedentes e 0 contatos no Supabase.</small></div><span class="badge badge-success"><i class="fa-solid fa-cloud"></i>Online</span></div><div class="setting-row"><div><strong>Limpar todos os dados</strong><small>Exclui permanentemente todos os cadastros e contatos do banco.</small></div><button class="btn btn-danger" id="clearAllBtn"><i class="fa-solid fa-triangle-exclamation"></i>Limpar tudo</button></div></div>
+            <div class="card" id="migrationCard"><div class="card-title"><h3>Migração do navegador</h3></div><div class="setting-row"><div><strong>Dados da versão local</strong><small id="localMigrationSummary">Verificando registros antigos deste navegador...</small></div><button class="btn btn-primary" id="migrateLocalBtn" type="button"><i class="fa-solid fa-cloud-arrow-up"></i>Migrar para o banco</button></div><div class="summary-box">A migração compara os CNPJs, atualiza duplicados e preserva o arquivo local como cópia de segurança.</div></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <input class="hidden" type="file" id="csvFileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+  <input class="hidden" type="file" id="jsonFileInput" accept=".json,application/json" />
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="modal-backdrop" id="companyModalBackdrop" aria-hidden="true">
+    <div class="modal lg company-modal" role="dialog" aria-modal="true" aria-labelledby="companyModalTitle">
+      <div class="modal-header"><div><h3 id="companyModalTitle">Cadastrar concedente</h3><p class="modal-subtitle">Os dados cadastrais podem ser preenchidos automaticamente pelo CNPJ e ajustados manualmente.</p></div><button class="icon-btn" data-close="companyModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+      <form id="companyForm" novalidate>
+        <div class="modal-body company-modal-body" id="companyModalBody">
+          <input type="hidden" id="companyId" />
+          <div class="form-grid">
+            <div class="form-section-title span-3"><i class="fa-solid fa-building"></i><span>Dados da empresa</span></div>
+            <div class="field">
+              <label>CNPJ</label>
+              <div class="cnpj-input-wrap"><input class="form-control" id="cnpj" inputmode="text" maxlength="18" autocomplete="off" placeholder="00.000.000/0000-00" /><span class="cnpj-spinner hidden" id="cnpjSpinner"><i class="fa-solid fa-circle-notch fa-spin"></i></span></div>
+              <span class="field-hint" id="cnpjLookupStatus">Ao completar o CNPJ, a consulta será feita automaticamente.</span>
+            </div>
+            <div class="field"><label>Data do Cadastro <span class="required">*</span></label><input class="form-control" id="dataCadastro" type="date" required /></div>
+            <div class="field"><label>Situação cadastral</label><input class="form-control api-fill-field" id="situacaoCadastral" /></div>
+            <div class="field span-2"><label>Razão Social <span class="required">*</span></label><input class="form-control api-fill-field" id="razaoSocial" required /></div>
+            <div class="field"><label>Nome Fantasia <span class="required">*</span></label><input class="form-control api-fill-field" id="nomeFantasia" required /></div>
+            <div class="field"><label>Data de abertura</label><input class="form-control api-fill-field" id="dataAbertura" type="date" /></div>
+            <div class="field span-2"><label>Natureza jurídica</label><input class="form-control api-fill-field" id="naturezaJuridica" /></div>
+            <div class="field span-3"><label>CNAE principal</label><input class="form-control api-fill-field" id="cnaePrincipal" /></div>
+
+            <div class="form-section-title span-3"><i class="fa-solid fa-location-dot"></i><span>Endereço</span></div>
+            <div class="field"><label>CEP</label><input class="form-control api-fill-field" id="cep" inputmode="numeric" maxlength="9" placeholder="00000-000" /><span class="field-hint" id="cepHint">O endereço pode ser completado pelo CNPJ ou pelo CEP.</span></div>
+            <div class="field span-2"><label>Logradouro</label><input class="form-control api-fill-field" id="logradouro" /></div>
+            <div class="field"><label>Número</label><input class="form-control api-fill-field" id="numero" /></div>
+            <div class="field span-2"><label>Complemento</label><input class="form-control api-fill-field" id="complemento" /></div>
+            <div class="field"><label>Bairro</label><input class="form-control api-fill-field" id="bairro" /></div>
+            <div class="field"><label>Estado <span class="required">*</span></label><input class="form-control api-fill-field" id="estado" maxlength="2" placeholder="UF" required /></div>
+            <div class="field"><label>Cidade <span class="required">*</span></label><input class="form-control api-fill-field" id="cidade" required /></div>
+
+            <div class="form-section-title span-3"><i class="fa-solid fa-address-book"></i><span>Contato e acompanhamento</span></div>
+            <div class="field"><label>E-mail</label><input class="form-control api-fill-field" id="email" type="email" /></div>
+            <div class="field"><label>Telefone</label><input class="form-control api-fill-field" id="telefone" inputmode="tel" maxlength="20" placeholder="(00) 00000-0000" /></div>
+            <div class="field"><label>Polo <span class="required">*</span></label><input class="form-control" id="polo" required /></div>
+            <div class="field"><label>Início da Vigência</label><input class="form-control vigencia-date" id="inicioVigencia" type="date" /></div>
+            <div class="field"><label>Fim da Vigência</label><input class="form-control vigencia-date" id="fimVigencia" type="date" /></div>
+            <div class="field"><label>Situação da Vigência</label><input class="form-control" id="situacaoVigencia" readonly /></div>
+            <div class="field"><label>Vigência calculada</label><input class="form-control" id="vigenciaResumo" readonly /></div>
+            <div class="field span-2"><label>Situação do contato <span class="required">*</span></label><select class="form-control" id="situacao" required></select></div>
+            <div class="field span-3"><label>Forma de Contato</label><div class="checkbox-grid" id="formasContatoGroup"></div></div>
+            <div class="field span-3"><label>Observações</label><textarea class="form-control" id="observacoes"></textarea></div>
+            <div class="span-3 summary-box" id="vigenciaDetails">Informe as datas para calcular a duração e os dias restantes.</div>
+            <div class="span-3 cnpj-source-box hidden" id="cnpjSourceBox"><i class="fa-solid fa-wand-magic-sparkles"></i><span id="cnpjSourceText"></span></div>
+          </div>
+        </div>
+        <div class="modal-footer company-modal-footer"><span class="modal-footer-note"><i class="fa-solid fa-pen"></i>Todos os campos podem ser ajustados antes de salvar.</span><div class="modal-footer-actions"><button type="button" class="btn btn-secondary" data-close="companyModalBackdrop">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>Salvar concedente</button></div></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="viewModalBackdrop" aria-hidden="true"><div class="modal lg"><div class="modal-header"><h3>Detalhes da concedente</h3><button class="icon-btn" data-close="viewModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body" id="viewModalBody"></div><div class="modal-footer"><button class="btn btn-secondary" data-close="viewModalBackdrop">Fechar</button></div></div></div>
+
+  <div class="modal-backdrop" id="contactModalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header"><h3>Registrar contato</h3><button class="icon-btn" data-close="contactModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
+      <form id="contactForm" novalidate><div class="modal-body"><input type="hidden" id="contactCompanyId" /><div class="form-grid">
+        <div class="field span-3"><label>Concedente <span class="required">*</span></label><select class="form-control" id="contactCompanySelect" required></select></div>
+        <div class="field"><label>Data do contato <span class="required">*</span></label><input class="form-control" id="contactDate" type="date" required /></div>
+        <div class="field"><label>Horário <span class="required">*</span></label><input class="form-control" id="contactTime" type="time" required /></div>
+        <div class="field"><label>Responsável <span class="required">*</span></label><input class="form-control" id="contactResponsible" required /></div>
+        <div class="field"><label>Forma de contato <span class="required">*</span></label><select class="form-control" id="contactMethod" required></select></div>
+        <div class="field"><label>Pessoa contatada</label><input class="form-control" id="contactPerson" /></div>
+        <div class="field"><label>Resultado do contato <span class="required">*</span></label><select class="form-control" id="contactResult" required></select></div>
+        <div class="field span-2"><label>Próxima ação</label><input class="form-control" id="contactNextAction" /></div>
+        <div class="field"><label>Próximo contato previsto</label><input class="form-control" id="contactNextDate" type="date" /></div>
+        <div class="field span-3"><label>Observações</label><textarea class="form-control" id="contactNotes"></textarea></div>
+      </div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-close="contactModalBackdrop">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>Registrar contato</button></div></form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="exportModalBackdrop" data-admin-only aria-hidden="true"><div class="modal sm"><div class="modal-header"><h3>Exportar cadastros</h3><button class="icon-btn" data-close="exportModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div style="display:grid;gap:9px">
+    <button class="btn btn-secondary export-option" data-export="all"><i class="fa-solid fa-database"></i>Exportar todos os cadastros</button>
+    <button class="btn btn-secondary export-option" data-export="filtered"><i class="fa-solid fa-filter"></i>Exportar registros filtrados</button>
+    <button class="btn btn-secondary export-option" data-export="expired"><i class="fa-solid fa-calendar-xmark"></i>Exportar convênios vencidos</button>
+    <button class="btn btn-secondary export-option" data-export="upcoming"><i class="fa-solid fa-clock"></i>Exportar próximos do vencimento</button>
+    <button class="btn btn-secondary export-option" data-export="contacts"><i class="fa-solid fa-comments"></i>Exportar histórico de contatos</button>
+  </div></div></div></div>
+
+  <div class="modal-backdrop" id="importModalBackdrop" data-admin-only aria-hidden="true">
+    <div class="modal xl import-modal">
+      <div class="modal-header"><div><h3>Importação inteligente de planilha</h3><p class="modal-subtitle">Importe CSV, XLS ou XLSX com validação, prévia e complementação opcional por CNPJ.</p></div><button class="icon-btn" data-close="importModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-body">
+        <div class="import-top-actions">
+          <button class="btn btn-secondary" id="downloadImportTemplate" type="button"><i class="fa-solid fa-file-arrow-down"></i>Baixar modelo</button>
+          <button class="btn btn-primary" id="selectImportFile" type="button"><i class="fa-solid fa-folder-open"></i>Selecionar planilha</button>
+          <span class="import-file-name" id="importFileName">Nenhum arquivo selecionado.</span>
+        </div>
+        <div class="import-options-card">
+          <div class="field"><label>Tratamento de CNPJ duplicado</label><select class="form-control" id="duplicateStrategy"><option value="ignore">Ignorar duplicados</option><option value="update-empty">Preencher somente campos vazios</option><option value="update">Atualizar com os dados da planilha</option></select></div>
+          <label class="switch-row import-enrich-option"><input id="importEnrichCnpj" type="checkbox" checked /><span class="switch-control"></span><span><strong>Completar dados pelo CNPJ</strong><small>Consulta em fila para evitar bloqueios nas APIs gratuitas.</small></span></label>
+        </div>
+        <div id="importSummary" class="import-summary-grid"><div class="summary-box">Selecione uma planilha para iniciar a validação.</div></div>
+        <div class="import-progress hidden" id="importProgress"><div class="import-progress-track"><span id="importProgressBar"></span></div><strong id="importProgressText">Preparando importação...</strong></div>
+        <div class="import-preview" id="importPreview"><div class="empty-state"><i class="fa-solid fa-table"></i><strong>Nenhuma prévia disponível</strong><span>Use o modelo recomendado ou selecione sua planilha atual.</span></div></div>
+      </div>
+      <div class="modal-footer import-modal-footer"><button class="btn btn-secondary hidden" id="downloadImportErrors" type="button"><i class="fa-solid fa-triangle-exclamation"></i>Baixar relatório de erros</button><span class="modal-footer-spacer"></span><button class="btn btn-secondary" data-close="importModalBackdrop">Cancelar</button><button class="btn btn-primary" id="confirmImport" disabled><i class="fa-solid fa-file-import"></i>Confirmar importação</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="userModalBackdrop" data-admin-only aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+      <div class="modal-header"><div><h3 id="userModalTitle">Cadastrar usuário</h3><p class="modal-subtitle" id="userModalSubtitle">Crie um acesso com senha provisória.</p></div><button class="icon-btn" type="button" data-user-close="userModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+      <form id="userForm" novalidate>
+        <div class="modal-body">
+          <input type="hidden" id="userId" />
+          <div class="form-grid user-form-grid">
+            <div class="field span-2"><label>Nome completo <span class="required">*</span></label><input class="form-control" id="userName" maxlength="120" required /></div>
+            <div class="field"><label>Perfil <span class="required">*</span></label><select class="form-control" id="userRole" required><option value="operador">Operador</option><option value="administrador">Administrador</option></select></div>
+            <div class="field span-2"><label>E-mail <span class="required">*</span></label><input class="form-control" id="userEmail" type="email" autocomplete="off" required /></div>
+            <div class="field"><label>Polo</label><input class="form-control" id="userPolo" maxlength="100" placeholder="Opcional" /></div>
+            <div class="field span-2" id="temporaryPasswordField"><label>Senha provisória <span class="required">*</span></label><div class="password-field"><input class="form-control" id="userTemporaryPassword" type="password" minlength="8" autocomplete="new-password" /><button class="password-toggle" id="toggleTemporaryPassword" type="button" aria-label="Mostrar senha"><i class="fa-regular fa-eye"></i></button></div><span class="field-hint">Mínimo de 8 caracteres. O usuário poderá trocar a senha pelo fluxo “Esqueci minha senha”.</span></div>
+            <div class="field user-active-field"><label>Status inicial</label><label class="switch-row"><input id="userActive" type="checkbox" checked /><span class="switch-control"></span><span>Usuário ativo</span></label></div>
+          </div>
+          <div class="auth-message hidden" id="userFormMessage"></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary" type="button" data-user-close="userModalBackdrop">Cancelar</button><button class="btn btn-primary" id="saveUserBtn" type="submit"><i class="fa-solid fa-floppy-disk"></i>Salvar usuário</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="userPasswordModalBackdrop" data-admin-only aria-hidden="true">
+    <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="userPasswordTitle">
+      <div class="modal-header"><div><h3 id="userPasswordTitle">Definir senha provisória</h3><p class="modal-subtitle" id="userPasswordSubtitle">A senha atual não será exibida.</p></div><button class="icon-btn" type="button" data-user-close="userPasswordModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+      <form id="userPasswordForm" novalidate>
+        <div class="modal-body"><input type="hidden" id="passwordUserId" /><div class="field"><label>Nova senha provisória <span class="required">*</span></label><div class="password-field"><input class="form-control" id="newTemporaryPassword" type="password" minlength="8" autocomplete="new-password" required /><button class="password-toggle" id="toggleNewTemporaryPassword" type="button" aria-label="Mostrar senha"><i class="fa-regular fa-eye"></i></button></div><span class="field-hint">Utilize pelo menos 8 caracteres.</span></div><div class="auth-message hidden" id="userPasswordMessage"></div></div>
+        <div class="modal-footer"><button class="btn btn-secondary" type="button" data-user-close="userPasswordModalBackdrop">Cancelar</button><button class="btn btn-primary" id="saveUserPasswordBtn" type="submit"><i class="fa-solid fa-key"></i>Atualizar senha</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="auditDetailModalBackdrop" data-admin-only aria-hidden="true">
+    <div class="modal xl audit-detail-modal" role="dialog" aria-modal="true" aria-labelledby="auditDetailTitle">
+      <div class="modal-header"><div><h3 id="auditDetailTitle">Detalhes da auditoria</h3><p class="modal-subtitle">Comparação das informações anteriores e novas.</p></div><button class="icon-btn" type="button" data-close="auditDetailModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-body">
+        <div class="audit-detail-meta" id="auditDetailMeta"></div>
+        <div class="summary-box audit-detail-summary"><i class="fa-solid fa-circle-info"></i><span id="auditDetailSummary">Operação registrada.</span></div>
+        <div class="card-title audit-changes-title"><h3>Campos e valores</h3><span>Antes e depois da operação</span></div>
+        <div class="table-wrap audit-changes-wrap"><table class="audit-changes-table"><thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead><tbody id="auditChangesBody"></tbody></table></div>
+        <details class="audit-raw-details"><summary><i class="fa-solid fa-code"></i>Visualizar dados técnicos em JSON</summary><div class="audit-raw-grid"><div><strong>Dados anteriores</strong><pre id="auditRawBefore">{}</pre></div><div><strong>Dados novos</strong><pre id="auditRawAfter">{}</pre></div></div></details>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="auditDetailModalBackdrop">Fechar</button></div>
+    </div>
+  </div>
+
+
+  <div class="modal-backdrop" id="auditDeleteModalBackdrop" data-admin-only aria-hidden="true">
+    <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="auditDeleteTitle">
+      <div class="modal-header"><div><h3 id="auditDeleteTitle">Excluir registros da auditoria</h3><p class="modal-subtitle" id="auditDeleteSubtitle">A exclusão ficará registrada em um comprovante técnico permanente.</p></div><button class="icon-btn" type="button" data-audit-delete-close aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-body"><div class="summary-box audit-delete-warning"><i class="fa-solid fa-triangle-exclamation"></i><span id="auditDeleteMessage">Confirme os registros que serão removidos.</span></div><div class="field"><label>Motivo da exclusão <span class="required">*</span></label><textarea class="form-control" id="auditDeleteReason" maxlength="500" placeholder="Ex.: registros de teste ou duplicados" required></textarea><span class="field-hint">O motivo, o administrador, a data e os identificadores excluídos serão preservados.</span></div><div class="auth-message hidden" id="auditDeleteError"></div></div>
+      <div class="modal-footer"><button class="btn btn-secondary" type="button" data-audit-delete-close>Cancelar</button><button class="btn btn-danger" id="auditConfirmDeleteBtn" type="button"><i class="fa-solid fa-trash"></i>Excluir registros</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="confirmModalBackdrop" aria-hidden="true"><div class="modal sm"><div class="modal-header"><h3 id="confirmTitle">Confirmar ação</h3><button class="icon-btn" data-close="confirmModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><p id="confirmMessage" style="margin:0;line-height:1.6"></p></div><div class="modal-footer"><button class="btn btn-secondary" data-close="confirmModalBackdrop">Cancelar</button><button class="btn btn-danger" id="confirmActionBtn">Confirmar</button></div></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="/js/supabase-config.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/supabase-client.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/auth.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/cnpj-service.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/data-service.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/audit.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/notifications.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/user-management.js?v=20260730-etapa7-visual-fix"></script>
+  <script src="/js/app.js?v=20260730-etapa7-visual-fix"></script>
+
+</body>
+</html>
