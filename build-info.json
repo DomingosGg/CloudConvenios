@@ -1,0 +1,16 @@
+{
+  "version": "8.3.0",
+  "release": "publicacao-integral-v8.3",
+  "features": {
+    "usuarios_jwt_es256_jwks": true,
+    "sessao_estavel": true,
+    "mfa_authenticator_totp": true,
+    "edicao_contatos": true,
+    "kanban_rolagem_mouse": true,
+    "dias_restantes_concedentes": true,
+    "historico_downloads": true,
+    "modelo_importacao_v8": true,
+    "exportacao_automatica_18h": true
+  },
+  "verification_url": "https://cloudconvenios.pages.dev/api/version"
+}

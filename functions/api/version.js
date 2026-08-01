@@ -1,0 +1,30 @@
+const RELEASE = Object.freeze({
+  version: '8.3.0',
+  name: 'CloudConvenios',
+  platform: 'cloudflare-pages',
+  features: {
+    usuarios_jwt_es256_jwks: true,
+    sessao_estavel: true,
+    mfa_authenticator_totp: true,
+    edicao_contatos: true,
+    kanban_rolagem_mouse: true,
+    dias_restantes_concedentes: true,
+    historico_downloads: true,
+    modelo_importacao_v8: true,
+    exportacao_automatica_18h: true
+  }
+});
+
+export async function onRequestGet() {
+  return new Response(JSON.stringify({
+    ok: true,
+    ...RELEASE,
+    checked_at: new Date().toISOString()
+  }), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store'
+    }
+  });
+}

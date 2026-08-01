@@ -53,3 +53,16 @@ No Supabase, atualize **Authentication → URL Configuration** para o novo domí
 Nunca envie `SUPABASE_SECRET_KEY`, `.env` ou `.dev.vars` para o GitHub. A chave publicável usada no navegador pode permanecer em `js/supabase-config.js`, desde que as políticas RLS do banco estejam ativas.
 
 Consulte `CHECKLIST-PUBLICACAO.md` antes de desativar o Netlify.
+
+
+## Versão publicada
+
+Versão esperada: **8.3.0**
+
+Após o deploy, confirme em:
+
+- `/api/version`
+- `/api/health`
+- `/api/users-admin`
+
+`/api/version` deve informar `version: "8.3.0"` e todas as funcionalidades como `true`.

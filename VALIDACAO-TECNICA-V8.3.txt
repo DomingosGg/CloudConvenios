@@ -1,0 +1,15 @@
+VALIDAÇÃO TÉCNICA — CLOUDCONVENIOS V8.3.0
+
+A publicação integral contém:
+[OK] MFA TOTP / aplicativo Authenticator
+[OK] Sessão estável e renovação controlada
+[OK] Gestão de usuários com JWT ES256 validado por JWKS
+[OK] Edição de contatos
+[OK] Rolagem horizontal do Kanban com a roda do mouse e arraste
+[OK] Coluna Dias restantes em Concedentes
+[OK] Histórico de downloads e exportações
+[OK] Modelo de importação V8
+[OK] Exportação automática diária às 18h
+[OK] Endpoint de confirmação /api/version
+
+A estrutura precisa permanecer com css/, js/, functions/, modelo/ e supabase/ como pastas.

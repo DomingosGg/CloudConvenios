@@ -1,0 +1,8 @@
+VALIDAÇÃO TÉCNICA — CLOUDCONVENIOS V8.1
+
+- Sessão principal não é encerrada por erro HTTP da tela de usuários.
+- Função users-admin valida JWT ES256 pelo Data API/PostgREST com RLS.
+- Token é renovado uma única vez em erros 401/expiração.
+- Perfil é carregado com até três tentativas em falhas transitórias.
+- Eventos SIGNED_IN duplicados não reativam a mesma sessão.
+- Bundle interno do index.html atualizado com as mesmas correções.

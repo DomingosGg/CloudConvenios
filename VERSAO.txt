@@ -1,3 +1,1 @@
-v1.0-cloudflare-final
-Data: 2026-08-01
-Migração: Cloudflare Pages Functions, correção do diagnóstico users-admin e limpeza das instruções do Netlify.
+8.3.0 - Publicação integral dos ajustes, MFA TOTP e usuários JWT ES256
