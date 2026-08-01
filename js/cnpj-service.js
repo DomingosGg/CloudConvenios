@@ -33,6 +33,29 @@
     return '';
   }
 
+
+  function formatCnaeCode(value) {
+    const raw = cleanText(value, 40);
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length === 7) {
+      return `${digits.slice(0, 4)}-${digits.slice(4, 5)}/${digits.slice(5)}`;
+    }
+    return raw;
+  }
+
+  function formatCnae(code, description) {
+    const formattedCode = formatCnaeCode(code);
+    const text = cleanText(description, 220);
+    if (formattedCode && text && normalizeTextForCompare(formattedCode) !== normalizeTextForCompare(text)) {
+      return `${formattedCode} — ${text}`;
+    }
+    return formattedCode || text;
+  }
+
+  function normalizeTextForCompare(value) {
+    return cleanText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
   function normalizeBrasilApi(raw) {
     return {
       cnpj: normalizeCnpj(raw.cnpj),
@@ -41,7 +64,7 @@
       dataAbertura: normalizeDate(raw.data_inicio_atividade),
       situacaoCadastral: firstText(raw.descricao_situacao_cadastral, raw.situacao_cadastral),
       naturezaJuridica: firstText(raw.descricao_natureza_juridica, raw.natureza_juridica),
-      cnaePrincipal: [cleanText(raw.cnae_fiscal), cleanText(raw.cnae_fiscal_descricao)].filter(Boolean).join(' — '),
+      cnaePrincipal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
       email: cleanText(raw.email, 254).toLowerCase(),
       telefone: cleanText(firstText(raw.ddd_telefone_1, raw.ddd_telefone_2)).replace(/\D/g, '').slice(0, 11),
       cep: cleanText(raw.cep).replace(/\D/g, '').slice(0, 8),
@@ -65,7 +88,10 @@
       dataAbertura: normalizeDate(firstText(data.dataInicioAtividades, data.dataAbertura, data.openingDate)),
       situacaoCadastral: firstText(data.situacaoCadastral, data.status),
       naturezaJuridica: firstText(data.naturezaJuridica, data.legalNature),
-      cnaePrincipal: firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal, data.mainActivity),
+      cnaePrincipal: formatCnae(
+        firstText(data.cnaePrincipal?.codigo, data.cnaePrincipal?.code, data.cnaeCodigo, data.mainActivity?.code),
+        firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal?.description, data.mainActivity?.text, data.mainActivity)
+      ),
       email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
       telefone: cleanText(firstText(data.telefone, data.phone)).replace(/\D/g, '').slice(0, 11),
       cep: cleanText(firstText(data.cep, data.zip)).replace(/\D/g, '').slice(0, 8),
@@ -117,8 +143,11 @@
       ),
       cnaePrincipal: firstText(
         data.cnaePrincipal,
+        formatCnae(
+          firstText(data.cnae_codigo, data.cnaeCodigo, data.cnae_fiscal, data.mainActivity?.code),
+          firstText(data.cnae_descricao, data.cnaeDescricao, data.cnae_fiscal_descricao, data.mainActivity?.text)
+        ),
         data.cnae_principal,
-        data.cnae_fiscal_descricao,
         data.mainActivity
       ),
       email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),

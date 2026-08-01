@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.4.7" />
+  <meta name="app-version" content="8.4.8" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1745,7 +1745,13 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
                 <div><strong>Pasta de destino</strong><small>Pasta privada <code>exportacoes/automaticas</code> no armazenamento do Supabase.</small></div>
                 <span class="badge badge-muted"><i class="fa-solid fa-folder-closed"></i>Online</span>
               </div>
-              <div class="summary-box"><i class="fa-solid fa-circle-info"></i>O navegador não grava sozinho em uma pasta local do computador. As cópias automáticas ficam protegidas na pasta online e podem ser baixadas pelo histórico abaixo.</div>
+              <div class="setting-row">
+  <div>
+    <strong>Executar e verificar agora</strong>
+    <small id="automaticBackupStatus">Verificando o backup de hoje…</small>
+  </div>
+  <button class="btn btn-secondary" id="runAutomaticBackupNow" type="button"><i class="fa-solid fa-play"></i>Executar agora</button>
+</div><div class="summary-box"><i class="fa-solid fa-circle-info"></i>O navegador não grava sozinho em uma pasta local do computador. As cópias automáticas ficam protegidas na pasta online e podem ser baixadas pelo histórico abaixo.</div>
             </div>
             <div class="card settings-wide export-history-card">
               <div class="card-title">
@@ -1788,7 +1794,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
             <div class="field"><label>Nome Fantasia <span class="required">*</span></label><input class="form-control api-fill-field" id="nomeFantasia" required /></div>
             <div class="field"><label>Data de abertura</label><input class="form-control api-fill-field" id="dataAbertura" type="date" /></div>
             <div class="field span-2"><label>Natureza jurídica</label><input class="form-control api-fill-field" id="naturezaJuridica" /></div>
-            <div class="field span-3"><label>CNAE principal</label><input class="form-control api-fill-field" id="cnaePrincipal" /></div>
+            <div class="field span-3"><label>CNAE principal (código e descrição)</label><input class="form-control api-fill-field" id="cnaePrincipal" /></div>
 
             <div class="form-section-title span-3"><i class="fa-solid fa-location-dot"></i><span>Endereço</span></div>
             <div class="field"><label>CEP</label><input class="form-control api-fill-field" id="cep" inputmode="numeric" maxlength="9" placeholder="00000-000" /><span class="field-hint" id="cepHint">O endereço pode ser completado pelo CNPJ ou pelo CEP.</span></div>
@@ -1802,7 +1808,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
             <div class="form-section-title span-3"><i class="fa-solid fa-address-book"></i><span>Contato e acompanhamento</span></div>
             <div class="field"><label>E-mail</label><input class="form-control api-fill-field" id="email" type="email" /></div>
             <div class="field"><label>Telefone</label><input class="form-control api-fill-field" id="telefone" inputmode="tel" maxlength="20" placeholder="(00) 00000-0000" /></div>
-            <div class="field"><label>Polo <span class="required">*</span></label><input class="form-control" id="polo" required /></div>
+            <div class="field"><label>Polo <span style="font-weight:400;color:var(--muted)">(opcional)</span></label><input class="form-control" id="polo" /></div>
             <div class="field"><label>Início da Vigência</label><input class="form-control vigencia-date" id="inicioVigencia" type="date" /></div>
             <div class="field"><label>Fim da Vigência</label><input class="form-control vigencia-date" id="fimVigencia" type="date" /></div>
             <div class="field"><label>Situação da Vigência</label><input class="form-control" id="situacaoVigencia" readonly /></div>
@@ -1957,7 +1963,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.4.7-kanban-drag-only';
+    window.__CONVENIOS_BUILD__ = '8.4.8-model-cnae-backup';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -2900,6 +2906,29 @@ window.APP_CONFIG = Object.freeze({
     return '';
   }
 
+
+  function formatCnaeCode(value) {
+    const raw = cleanText(value, 40);
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length === 7) {
+      return `${digits.slice(0, 4)}-${digits.slice(4, 5)}/${digits.slice(5)}`;
+    }
+    return raw;
+  }
+
+  function formatCnae(code, description) {
+    const formattedCode = formatCnaeCode(code);
+    const text = cleanText(description, 220);
+    if (formattedCode && text && normalizeTextForCompare(formattedCode) !== normalizeTextForCompare(text)) {
+      return `${formattedCode} — ${text}`;
+    }
+    return formattedCode || text;
+  }
+
+  function normalizeTextForCompare(value) {
+    return cleanText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
   function normalizeBrasilApi(raw) {
     return {
       cnpj: normalizeCnpj(raw.cnpj),
@@ -2908,7 +2937,7 @@ window.APP_CONFIG = Object.freeze({
       dataAbertura: normalizeDate(raw.data_inicio_atividade),
       situacaoCadastral: firstText(raw.descricao_situacao_cadastral, raw.situacao_cadastral),
       naturezaJuridica: firstText(raw.descricao_natureza_juridica, raw.natureza_juridica),
-      cnaePrincipal: [cleanText(raw.cnae_fiscal), cleanText(raw.cnae_fiscal_descricao)].filter(Boolean).join(' — '),
+      cnaePrincipal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
       email: cleanText(raw.email, 254).toLowerCase(),
       telefone: cleanText(firstText(raw.ddd_telefone_1, raw.ddd_telefone_2)).replace(/\D/g, '').slice(0, 11),
       cep: cleanText(raw.cep).replace(/\D/g, '').slice(0, 8),
@@ -2932,7 +2961,10 @@ window.APP_CONFIG = Object.freeze({
       dataAbertura: normalizeDate(firstText(data.dataInicioAtividades, data.dataAbertura, data.openingDate)),
       situacaoCadastral: firstText(data.situacaoCadastral, data.status),
       naturezaJuridica: firstText(data.naturezaJuridica, data.legalNature),
-      cnaePrincipal: firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal, data.mainActivity),
+      cnaePrincipal: formatCnae(
+        firstText(data.cnaePrincipal?.codigo, data.cnaePrincipal?.code, data.cnaeCodigo, data.mainActivity?.code),
+        firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal?.description, data.mainActivity?.text, data.mainActivity)
+      ),
       email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
       telefone: cleanText(firstText(data.telefone, data.phone)).replace(/\D/g, '').slice(0, 11),
       cep: cleanText(firstText(data.cep, data.zip)).replace(/\D/g, '').slice(0, 8),
@@ -2984,8 +3016,11 @@ window.APP_CONFIG = Object.freeze({
       ),
       cnaePrincipal: firstText(
         data.cnaePrincipal,
+        formatCnae(
+          firstText(data.cnae_codigo, data.cnaeCodigo, data.cnae_fiscal, data.mainActivity?.code),
+          firstText(data.cnae_descricao, data.cnaeDescricao, data.cnae_fiscal_descricao, data.mainActivity?.text)
+        ),
         data.cnae_principal,
-        data.cnae_fiscal_descricao,
         data.mainActivity
       ),
       email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
@@ -5217,6 +5252,8 @@ window.APP_CONFIG = Object.freeze({
       exportHistory: [],
       exportHistoryLoadedAt: 0,
       exportHistoryLoading: false,
+      automaticBackupRunning: false,
+      automaticBackupLastCheck: '',
       importRows: [],
       importErrors: [],
       importFileName: '',
@@ -5803,7 +5840,7 @@ window.APP_CONFIG = Object.freeze({
     function validateCompanyForm(data) {
       let valid = true;
       $$('#companyForm .invalid').forEach((element) => element.classList.remove('invalid'));
-      ['razaoSocial','nomeFantasia','dataCadastro','estado','cidade','polo','situacao'].forEach((id) => {
+      ['razaoSocial','nomeFantasia','dataCadastro','estado','cidade','situacao'].forEach((id) => {
         const element = $('#' + id);
         if (!element.value.trim()) { element.classList.add('invalid'); valid = false; }
       });
@@ -6122,6 +6159,7 @@ window.APP_CONFIG = Object.freeze({
       const contacts = state.data.concedentes.reduce((sum, company) => sum + company.contatos.length, 0);
       $('#storageSummary').textContent = `${state.data.concedentes.length} concedente(s) e ${contacts} contato(s) no Supabase.`;
       renderExportHistory();
+      updateAutomaticBackupStatus();
     }
 
     function renderAll() {
@@ -6132,7 +6170,7 @@ window.APP_CONFIG = Object.freeze({
     }
     function refreshChartsIfVisible(){setTimeout(()=>{const active=$('.panel.active')?.id;if(active==='panel-dashboard')renderDashboard();if(active==='panel-relatorios')renderReports();},30);}
 
-    const CSV_HEADERS = ['Situação da Vigência','CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral','Natureza Jurídica','CNAE Principal','CEP','Logradouro','Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone','Polo','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro','Vigência','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ','Observações'];
+    const CSV_HEADERS = ['Situação da Vigência','CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral','Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro','Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone','Polo','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro','Vigência','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ','Observações'];
     function csvEscape(value){const s=String(value??'').replace(/"/g,'""');return /[;"\n\r]/.test(s)?`"${s}"`:s;}
     function companyToCsvRow(c){return [c.situacaoVigencia,c.cnpj,c.razaoSocial,c.nomeFantasia,formatDate(c.dataAbertura),c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.cep,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.email,c.telefone,c.polo,formatDate(c.inicioVigencia),formatDate(c.fimVigencia),c.diasRestantes??'',formatDate(c.dataCadastro),c.vigenciaResumo,c.situacao,c.formasContato.join(', '),c.fonteCnpj,c.consultadoEm?new Date(c.consultadoEm).toLocaleString('pt-BR'):'',c.observacoes];}
 
@@ -6158,11 +6196,40 @@ window.APP_CONFIG = Object.freeze({
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = filename;
+      anchor.rel = 'noopener';
+      anchor.style.display = 'none';
       document.body.appendChild(anchor);
-      anchor.click();
+      anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
       anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
       return blob;
+    }
+
+    async function saveBlobToDevice(blob, filename, { usePicker = false } = {}) {
+      const fileBlob = blob instanceof Blob ? blob : new Blob([blob]);
+      if (usePicker && typeof window.showSaveFilePicker === 'function') {
+        try {
+          const extension = String(filename).includes('.') ? `.${String(filename).split('.').pop()}` : '';
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+              description: extension === '.json' ? 'Arquivo JSON' : 'Planilha do Excel',
+              accept: {
+                [(fileBlob.type || 'application/octet-stream').split(';')[0]]: extension ? [extension] : []
+              }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(fileBlob);
+          await writable.close();
+          return true;
+        } catch (error) {
+          if (error?.name === 'AbortError') return false;
+          console.warn('[Download] O seletor de arquivos falhou; usando download padrão.', error);
+        }
+      }
+      downloadBlob(fileBlob, fileBlob.type || 'application/octet-stream', filename);
+      return true;
     }
 
     function workbookBlob(sheetDefinitions) {
@@ -6239,8 +6306,8 @@ window.APP_CONFIG = Object.freeze({
     }
 
     async function completeSpreadsheetDownload(blob, filename, kind, totalRecords = 0) {
-      await saveExportHistory(blob, filename, kind, totalRecords);
       downloadBlob(blob, blob.type, filename);
+      return saveExportHistory(blob, filename, kind, totalRecords);
     }
 
     async function exportCompanies(mode) {
@@ -6371,7 +6438,120 @@ window.APP_CONFIG = Object.freeze({
       } finally {
         state.exportHistoryLoading = false;
         renderExportHistory();
+        updateAutomaticBackupStatus();
       }
+    }
+
+
+    function saoPauloClock(date = new Date()) {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+      }).formatToParts(date).reduce((accumulator, part) => {
+        if (part.type !== 'literal') accumulator[part.type] = part.value;
+        return accumulator;
+      }, {});
+      return {
+        dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+        hour: Number(parts.hour || 0),
+        minute: Number(parts.minute || 0)
+      };
+    }
+
+    function updateAutomaticBackupStatus(message = '') {
+      const holder = $('#automaticBackupStatus');
+      if (!holder) return;
+      if (message) {
+        holder.textContent = message;
+        return;
+      }
+      const clock = saoPauloClock();
+      const todayBackup = state.exportHistory.find((item) => (
+        item.origem === 'automatica'
+        && String(item.tipo || '').includes('backup-json')
+        && String(item.arquivo_nome || '').includes(clock.dateKey)
+      ));
+      holder.textContent = todayBackup
+        ? `Backup de hoje concluído em ${new Date(todayBackup.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`
+        : clock.hour >= 18
+          ? 'Backup de hoje ainda não identificado. O sistema fará uma nova tentativa.'
+          : 'Próxima execução programada para hoje às 18:00.';
+    }
+
+    async function runAutomaticBackup({ force = false, silent = false } = {}) {
+      if (!isAdmin() || state.automaticBackupRunning) return null;
+      state.automaticBackupRunning = true;
+      const button = $('#runAutomaticBackupNow');
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Executando…';
+      }
+      updateAutomaticBackupStatus('Gerando backup online…');
+      try {
+        const response = await exportApi('?action=automatic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force })
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || payload?.ok !== true) {
+          throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
+        }
+        state.exportHistoryLoadedAt = 0;
+        await loadExportHistory({ force: true, silent: true });
+        updateAutomaticBackupStatus(
+          payload?.data?.skipped
+            ? 'O backup de hoje já havia sido concluído.'
+            : 'Backup online concluído com sucesso.'
+        );
+        if (!silent) {
+          toast(
+            'success',
+            payload?.data?.skipped ? 'Backup já existente' : 'Backup automático concluído',
+            payload?.data?.skipped
+              ? 'A cópia de hoje já estava disponível no histórico.'
+              : 'Foram salvos o backup JSON e as planilhas de concedentes e contatos.'
+          );
+        }
+        return payload.data || {};
+      } catch (error) {
+        console.error('[Backup automático]', error);
+        updateAutomaticBackupStatus(`Falha na última tentativa: ${error.message || 'erro desconhecido'}`);
+        if (!silent) toast('error', 'Falha no backup automático', error.message || 'Não foi possível gerar a cópia online.');
+        return null;
+      } finally {
+        state.automaticBackupRunning = false;
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = '<i class="fa-solid fa-play"></i>Executar agora';
+        }
+      }
+    }
+
+    async function checkAutomaticBackupSchedule() {
+      if (!window.currentUser?.id || !isAdmin() || state.automaticBackupRunning) return;
+      const clock = saoPauloClock();
+      if (clock.hour < 18) {
+        updateAutomaticBackupStatus();
+        return;
+      }
+      if (state.automaticBackupLastCheck === clock.dateKey) {
+        updateAutomaticBackupStatus();
+        return;
+      }
+      state.automaticBackupLastCheck = clock.dateKey;
+      await runAutomaticBackup({ force: false, silent: true });
+    }
+
+    function startAutomaticBackupScheduler() {
+      if (window.__automaticBackupTimer) clearInterval(window.__automaticBackupTimer);
+      checkAutomaticBackupSchedule();
+      window.__automaticBackupTimer = setInterval(checkAutomaticBackupSchedule, 5 * 60 * 1000);
     }
 
     async function downloadHistoryFile(id) {
@@ -6385,7 +6565,7 @@ window.APP_CONFIG = Object.freeze({
         const disposition = response.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
         const filename = decodeURIComponent(match?.[1] || match?.[2] || 'exportacao.xlsx');
-        downloadBlob(blob, blob.type, filename);
+        await saveBlobToDevice(blob, filename);
       } catch (error) {
         toast('error', 'Falha no download', error.message || 'Não foi possível baixar o arquivo.');
       }
@@ -6428,7 +6608,7 @@ window.APP_CONFIG = Object.freeze({
       dataAbertura: ['datadeabertura','dataabertura','abertura'],
       situacaoCadastral: ['situacaocadastral','statuscadastral'],
       naturezaJuridica: ['naturezajuridica'],
-      cnaePrincipal: ['cnaeprincipal','cnae','atividadeprincipal'],
+      cnaePrincipal: ['cnaeprincipal','cnaeprincipalcodigoedescricao','cnaecodigoedescricao','cnae','atividadeprincipal'],
       cep: ['cep'],
       logradouro: ['logradouro','endereco','rua','avenida'],
       numero: ['numero','numerodoendereco'],
@@ -6438,7 +6618,7 @@ window.APP_CONFIG = Object.freeze({
       cidade: ['cidade','municipio'],
       email: ['email','emailcontato','correioeletronico'],
       telefone: ['telefone','celular','fone'],
-      polo: ['polo'],
+      polo: ['polo','poloopcional'],
       inicioVigencia: ['iniciodavigencia','iniciovigencia','datainiciovigencia'],
       fimVigencia: ['fimdavigencia','fimvigencia','datafimvigencia'],
       dataCadastro: ['datadocadastro','datacadastro'],
@@ -6542,13 +6722,9 @@ window.APP_CONFIG = Object.freeze({
       return toggle ? Boolean(toggle.checked) : true;
     }
 
-    function applyImportDefaults(company, entry) {
+    function applyImportDefaults(company) {
       const result = normalizeCompany(company);
       if (!result.nomeFantasia && result.razaoSocial) result.nomeFantasia = result.razaoSocial;
-      if (!String(result.polo || '').trim()) {
-        result.polo = 'Não informado';
-        if (entry) entry.defaultedPolo = true;
-      }
       return normalizeCompany(result);
     }
 
@@ -6599,7 +6775,6 @@ window.APP_CONFIG = Object.freeze({
             : 'CNAE não informado ou não localizado nas fontes públicas'
         );
       }
-      if (entry.defaultedPolo) warnings.push('Polo preenchido automaticamente como “Não informado”');
       if (entry.lookupError) warnings.push(`Consulta CNPJ: ${entry.lookupError}`);
       if (existing) warnings.push('CNPJ já cadastrado');
 
@@ -6830,17 +7005,58 @@ window.APP_CONFIG = Object.freeze({
       }
     }
 
+    const IMPORT_TEMPLATE_HEADERS = [
+      'CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral',
+      'Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro',
+      'Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone',
+      'Polo (opcional)','Início da Vigência','Fim da Vigência','Data do Cadastro',
+      'Situação','Forma de Contato','Observações'
+    ];
+
+    function createImportTemplateBlob() {
+      const instructions = [
+        ['Campo','Orientação','Obrigatório?'],
+        ['CNPJ','Pode ser a única informação preenchida quando a complementação por CNPJ estiver ativada.','Sim para consulta automática'],
+        ['CNAE','O sistema grava o código junto da descrição quando a fonte pública disponibilizar.','Não'],
+        ['Polo','Campo opcional. Pode permanecer vazio.','Não'],
+        ['Datas','Use DD/MM/AAAA ou uma data válida do Excel.','Não'],
+        ['Forma de Contato','Para mais de uma forma, separe por vírgula ou ponto e vírgula.','Não']
+      ];
+      return workbookBlob([
+        {
+          name: 'Importação',
+          rows: [IMPORT_TEMPLATE_HEADERS],
+          widths: [20,32,28,16,22,28,34,12,28,10,20,20,10,22,30,18,20,18,18,18,24,24,40]
+        },
+        {
+          name: 'Instruções',
+          rows: instructions,
+          widths: [24,72,24]
+        }
+      ]);
+    }
+
     async function downloadImportTemplate() {
+      const filename = 'modelo_importacao_convenios.xlsx';
+      let blob = null;
       try {
-        const response = await fetch('modelo/modelo_importacao_convenios.xlsx', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
-        const blob = await response.blob();
-        const filename = 'modelo_importacao_convenios.xlsx';
-        await completeSpreadsheetDownload(blob, filename, 'modelo-importacao', 0);
-        toast('success', 'Modelo preparado', 'A planilha formatada foi baixada e registrada no histórico.');
+        try {
+          blob = createImportTemplateBlob();
+        } catch (generatorError) {
+          console.warn('[Modelo] Geração local indisponível; tentando arquivo publicado.', generatorError);
+          const response = await fetch('/modelo/modelo_importacao_convenios.xlsx', { cache: 'no-store' });
+          if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
+          blob = await response.blob();
+        }
+        const downloaded = await saveBlobToDevice(blob, filename, { usePicker: true });
+        if (!downloaded) return;
+        toast('success', 'Modelo baixado', 'A planilha foi salva no computador.');
+        saveExportHistory(blob, filename, 'modelo-importacao', 0).catch((error) => {
+          console.warn('[Modelo] O download foi concluído, mas o histórico não foi atualizado.', error);
+        });
       } catch (error) {
-        console.error(error);
-        toast('error', 'Falha ao baixar o modelo', error.message || 'Não foi possível obter a planilha.');
+        console.error('[Modelo]', error);
+        toast('error', 'Falha ao baixar o modelo', error.message || 'Não foi possível gerar a planilha.');
       }
     }
 
@@ -7091,7 +7307,35 @@ window.APP_CONFIG = Object.freeze({
       }
     }
 
-    function backupJSON(){if(!ensureAdmin('criar backups'))return;const content=JSON.stringify({...state.data,source:'supabase',exportedAt:new Date().toISOString()},null,2);downloadBlob(content,'application/json;charset=utf-8;',`backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/','-')}.json`);toast('success','Backup criado','O arquivo JSON foi gerado com os dados do Supabase.');}
+    function buildBackupPayload() {
+      return {
+        ...state.data,
+        version: 2,
+        source: 'supabase',
+        exportedAt: new Date().toISOString(),
+        totalConcedentes: state.data.concedentes.length,
+        totalContatos: state.data.concedentes.reduce((total, company) => total + (company.contatos?.length || 0), 0)
+      };
+    }
+
+    async function backupJSON() {
+      if (!ensureAdmin('criar backups')) return;
+      try {
+        const payload = buildBackupPayload();
+        const content = JSON.stringify(payload, null, 2);
+        const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+        const filename = `backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/', '-')}.json`;
+        const downloaded = await saveBlobToDevice(blob, filename, { usePicker: true });
+        if (!downloaded) return;
+        toast('success', 'Backup JSON criado', 'O arquivo foi salvo no computador.');
+        saveExportHistory(blob, filename, 'backup-json', payload.totalConcedentes).catch((error) => {
+          console.warn('[Backup] O arquivo foi baixado, mas o histórico não foi atualizado.', error);
+        });
+      } catch (error) {
+        console.error('[Backup]', error);
+        toast('error', 'Falha ao criar backup', error.message || 'Não foi possível gerar o arquivo JSON.');
+      }
+    }
     function restoreJSON(file){if(!ensureAdmin('restaurar backups'))return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||!Array.isArray(parsed.concedentes))throw new Error('Estrutura inválida');confirmAction('Restaurar backup','Todos os dados do banco serão substituídos pelo conteúdo do arquivo. Deseja continuar?',async()=>{try{const result=await window.remoteData.replaceAll(parsed.concedentes.map(normalizeCompany));await loadRemoteData({silent:true});toast('success','Backup restaurado',`${result.inserted} concedente(s) e ${result.contactsInserted} contato(s) restaurado(s).`);}catch(error){toast('error','Falha na restauração',error.message||'Não foi possível restaurar o backup.');}});}catch(e){toast('error','Backup inválido','O arquivo JSON não possui uma estrutura compatível.');}};reader.readAsText(file);}
 
     function getLocalMigrationData() {
@@ -7197,6 +7441,7 @@ window.APP_CONFIG = Object.freeze({
       });
       $('#migrateLocalBtn').onclick=migrateLocalData;
       $('#exportHistoryRefresh')?.addEventListener('click', () => loadExportHistory({ force: true }));
+      $('#runAutomaticBackupNow')?.addEventListener('click', () => runAutomaticBackup({ force: true }));
       document.addEventListener('click', (event) => {
         const button = event.target.closest?.('[data-download-export]');
         if (!button) return;
@@ -7236,9 +7481,10 @@ window.APP_CONFIG = Object.freeze({
         loadRemoteData();
         if(window.__databaseSyncTimer)clearInterval(window.__databaseSyncTimer);
         window.__databaseSyncTimer=setInterval(()=>loadRemoteData({silent:true}),60000);
+        startAutomaticBackupScheduler();
       });
-      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&window.currentUser?.id)loadRemoteData({silent:true});});
-      if(window.currentUser?.id)loadRemoteData();
+      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&window.currentUser?.id){loadRemoteData({silent:true});checkAutomaticBackupSchedule();}});
+      if(window.currentUser?.id){loadRemoteData();startAutomaticBackupScheduler();}
     }
     init();
   })();
@@ -7247,6 +7493,7 @@ window.APP_CONFIG = Object.freeze({
   <div id="releaseMarkerV844" data-version="8.4.4" hidden></div>
 </body>
 </html>
+
 
 
 

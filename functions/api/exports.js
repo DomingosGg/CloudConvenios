@@ -1,4 +1,4 @@
-const VERSION = 'cloudflare-pages-exports-1.0.0';
+const VERSION = 'cloudflare-pages-exports-1.1.0-v848';
 const BUCKET = 'exportacoes';
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -202,63 +202,252 @@ function csvBlob(rows) {
 }
 
 async function queryAll(cfg, table, select, order = '') {
-  const suffix = order ? `&order=${encodeURIComponent(order)}` : '';
-  const { data } = await serviceFetch(cfg, `/rest/v1/${table}?select=${encodeURIComponent(select)}${suffix}`, { method: 'GET' });
-  return Array.isArray(data) ? data : [];
+  const pageSize = 1000;
+  const rows = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const suffix = order ? `&order=${encodeURIComponent(order)}` : '';
+    const { data } = await serviceFetch(
+      cfg,
+      `/rest/v1/${table}?select=${encodeURIComponent(select)}${suffix}`,
+      {
+        method: 'GET',
+        headers: {
+          Range: `${offset}-${offset + pageSize - 1}`,
+          Prefer: 'count=exact'
+        }
+      }
+    );
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
 }
 
-async function automaticExport(request, cfg) {
-  if (!cfg.cronSecret) throw Object.assign(new Error('EXPORT_CRON_SECRET não foi configurado no Cloudflare.'), { status: 503 });
-  const supplied = String(request.headers.get('X-Cron-Secret') || '');
-  if (!supplied || supplied !== cfg.cronSecret) throw Object.assign(new Error('Segredo da rotina automática inválido.'), { status: 401 });
+function formatCnaeValue(value) {
+  const text = String(value || '').trim();
+  const digits = text.replace(/\D/g, '');
+  if (/^\d{7}$/.test(digits) && text === digits) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 5)}/${digits.slice(5)}`;
+  }
+  return text;
+}
+
+function companyToBackup(item, contacts = []) {
+  return {
+    id: item.id,
+    cnpj: item.cnpj || '',
+    razaoSocial: item.razao_social || '',
+    nomeFantasia: item.nome_fantasia || item.razao_social || '',
+    dataAbertura: item.data_abertura || '',
+    situacaoCadastral: item.situacao_cadastral || '',
+    naturezaJuridica: item.natureza_juridica || '',
+    cnaePrincipal: formatCnaeValue(item.cnae_principal),
+    logradouro: item.logradouro || '',
+    numero: item.numero || '',
+    complemento: item.complemento || '',
+    bairro: item.bairro || '',
+    fonteCnpj: item.fonte_cnpj || '',
+    consultadoEm: item.consultado_em || '',
+    inicioVigencia: item.inicio_vigencia || '',
+    fimVigencia: item.fim_vigencia || '',
+    dataCadastro: item.data_cadastro || '',
+    estado: item.estado || '',
+    cidade: item.cidade || '',
+    cep: item.cep || '',
+    email: item.email || '',
+    telefone: item.telefone || '',
+    polo: item.polo || '',
+    situacao: item.situacao || 'Não contatado',
+    formasContato: Array.isArray(item.formas_contato) ? item.formas_contato : [],
+    observacoes: item.observacoes || '',
+    contatos: contacts.map((contact) => ({
+      id: contact.id,
+      data: contact.data_contato || '',
+      horario: contact.horario || '',
+      responsavel: contact.responsavel || '',
+      forma: contact.forma_contato || '',
+      pessoa: contact.pessoa_contatada || '',
+      resultado: contact.resultado_contato || '',
+      proximaAcao: contact.proxima_acao || '',
+      proximaData: contact.proximo_contato || '',
+      observacoes: contact.observacoes || '',
+      createdAt: contact.criado_em || '',
+      updatedAt: contact.atualizado_em || ''
+    })),
+    demo: Boolean(item.demonstracao),
+    createdAt: item.criado_em || '',
+    updatedAt: item.atualizado_em || ''
+  };
+}
+
+async function findDailyAutomaticBackup(cfg, stamp) {
+  const filename = `backup_completo_${stamp}.json`;
+  const { data } = await serviceFetch(
+    cfg,
+    `/rest/v1/historico_downloads?arquivo_nome=eq.${encodeURIComponent(filename)}&origem=eq.automatica&select=id,arquivo_nome,criado_em&order=criado_em.desc&limit=1`,
+    { method: 'GET' }
+  );
+  return Array.isArray(data) ? data[0] || null : null;
+}
+
+function saoPauloDateStamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date).reduce((accumulator, part) => {
+    if (part.type !== 'literal') accumulator[part.type] = part.value;
+    return accumulator;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+async function automaticExport(request, cfg, caller = null) {
+  const body = await request.json().catch(() => ({}));
+  const force = Boolean(body?.force);
+  const stamp = saoPauloDateStamp();
+
+  if (!force) {
+    const existing = await findDailyAutomaticBackup(cfg, stamp);
+    if (existing) {
+      return json(200, {
+        ok: true,
+        version: VERSION,
+        data: {
+          skipped: true,
+          reason: 'already_exists',
+          item: existing
+        }
+      });
+    }
+  }
 
   const [companies, contacts] = await Promise.all([
     queryAll(cfg, 'concedentes', '*', 'razao_social.asc'),
     queryAll(cfg, 'contatos', '*', 'data_contato.desc')
   ]);
 
+  const contactsByCompany = new Map();
+  contacts.forEach((contact) => {
+    const list = contactsByCompany.get(contact.concedente_id) || [];
+    list.push(contact);
+    contactsByCompany.set(contact.concedente_id, list);
+  });
+
+  const backupCompanies = companies.map((item) => companyToBackup(
+    item,
+    contactsByCompany.get(item.id) || []
+  ));
+
   const companyRows = [[
-    'ID','CNPJ','Razão Social','Nome Fantasia','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro',
-    'Estado','Cidade','CEP','E-mail','Telefone','Polo','Situação','Forma de Contato','Observações','Atualizado em'
+    'ID','CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral',
+    'Natureza Jurídica','CNAE Principal (código e descrição)','Início da Vigência',
+    'Fim da Vigência','Dias restantes','Data do Cadastro','Estado','Cidade','CEP',
+    'Logradouro','Número','Complemento','Bairro','E-mail','Telefone','Polo',
+    'Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ',
+    'Observações','Atualizado em'
   ], ...companies.map((item) => {
-    const end = item.fim_vigencia ? new Date(`${item.fim_vigencia}T12:00:00Z`) : null;
-    const today = new Date(); today.setUTCHours(12, 0, 0, 0);
-    const days = end ? Math.ceil((end - today) / 86400000) : '';
-    return [item.id,item.cnpj,item.razao_social,item.nome_fantasia,item.inicio_vigencia,item.fim_vigencia,days,item.data_cadastro,item.estado,item.cidade,item.cep,item.email,item.telefone,item.polo,item.situacao,(item.formas_contato || []).join(', '),item.observacoes,item.atualizado_em];
+    const endDate = item.fim_vigencia ? new Date(`${item.fim_vigencia}T12:00:00Z`) : null;
+    const today = new Date();
+    today.setUTCHours(12, 0, 0, 0);
+    const days = endDate ? Math.ceil((endDate - today) / 86400000) : '';
+    return [
+      item.id,item.cnpj,item.razao_social,item.nome_fantasia,item.data_abertura,
+      item.situacao_cadastral,item.natureza_juridica,formatCnaeValue(item.cnae_principal),
+      item.inicio_vigencia,item.fim_vigencia,days,item.data_cadastro,item.estado,item.cidade,
+      item.cep,item.logradouro,item.numero,item.complemento,item.bairro,item.email,item.telefone,
+      item.polo,item.situacao,(item.formas_contato || []).join(', '),item.fonte_cnpj,
+      item.consultado_em,item.observacoes,item.atualizado_em
+    ];
   })];
 
   const companyMap = new Map(companies.map((item) => [item.id, item]));
   const contactRows = [[
-    'ID','Concedente','CNPJ','Data do contato','Horário','Responsável','Forma de contato','Pessoa contatada',
-    'Resultado','Próxima ação','Próximo contato','Observações','Atualizado em'
+    'ID','Concedente','CNPJ','Data do contato','Horário','Responsável','Forma de contato',
+    'Pessoa contatada','Resultado','Próxima ação','Próximo contato','Observações','Atualizado em'
   ], ...contacts.map((item) => {
     const company = companyMap.get(item.concedente_id) || {};
-    return [item.id,company.nome_fantasia || company.razao_social || item.concedente_id,company.cnpj || '',item.data_contato,item.horario,item.responsavel,item.forma_contato,item.pessoa_contatada,item.resultado_contato,item.proxima_acao,item.proximo_contato,item.observacoes,item.atualizado_em];
+    return [
+      item.id,
+      company.nome_fantasia || company.razao_social || item.concedente_id,
+      company.cnpj || '',
+      item.data_contato,
+      item.horario,
+      item.responsavel,
+      item.forma_contato,
+      item.pessoa_contatada,
+      item.resultado_contato,
+      item.proxima_acao,
+      item.proximo_contato,
+      item.observacoes,
+      item.atualizado_em
+    ];
   })];
 
-  const stamp = new Date().toISOString().slice(0, 10);
-  const exports = [
-    { filename: `concedentes_${stamp}.csv`, type: 'concedentes-automatico', rows: companyRows, count: companies.length },
-    { filename: `contatos_${stamp}.csv`, type: 'contatos-automatico', rows: contactRows, count: contacts.length }
+  const timeSuffix = force
+    ? `_${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
+    : '';
+
+  const backupPayload = {
+    version: 2,
+    source: 'supabase',
+    automatic: true,
+    exportedAt: new Date().toISOString(),
+    totalConcedentes: companies.length,
+    totalContatos: contacts.length,
+    concedentes: backupCompanies
+  };
+
+  const files = [
+    {
+      filename: `backup_completo_${stamp}${timeSuffix}.json`,
+      type: 'backup-json-automatico',
+      blob: new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json;charset=utf-8' }),
+      count: companies.length
+    },
+    {
+      filename: `concedentes_${stamp}${timeSuffix}.csv`,
+      type: 'concedentes-automatico',
+      blob: csvBlob(companyRows),
+      count: companies.length
+    },
+    {
+      filename: `contatos_${stamp}${timeSuffix}.csv`,
+      type: 'contatos-automatico',
+      blob: csvBlob(contactRows),
+      count: contacts.length
+    }
   ];
+
   const saved = [];
-  for (const item of exports) {
-    const blob = csvBlob(item.rows);
+  for (const item of files) {
     const path = `automaticas/${datePath()}/${item.filename}`;
-    await uploadObject(cfg, path, blob, blob.type);
+    await uploadObject(cfg, path, item.blob, item.blob.type);
     saved.push(await insertHistory(cfg, {
-      usuario_id: null,
-      usuario_nome: 'Rotina automática 18h',
+      usuario_id: caller?.authUser?.id || null,
+      usuario_nome: caller?.profile?.nome || caller?.profile?.email || 'Rotina automática 18h',
       arquivo_nome: item.filename,
       tipo: item.type,
       origem: 'automatica',
       caminho_storage: path,
-      mime_type: blob.type,
-      tamanho_bytes: blob.size,
+      mime_type: item.blob.type,
+      tamanho_bytes: item.blob.size,
       total_registros: item.count
     }));
   }
-  return json(200, { ok: true, version: VERSION, data: { items: saved, companies: companies.length, contacts: contacts.length } });
+
+  return json(200, {
+    ok: true,
+    version: VERSION,
+    data: {
+      skipped: false,
+      items: saved,
+      companies: companies.length,
+      contacts: contacts.length
+    }
+  });
 }
 
 async function downloadStored(cfg, item) {
@@ -286,7 +475,12 @@ export async function onRequest(context) {
   try {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.searchParams.get('action') === 'automatic') {
-      return await automaticExport(request, cfg);
+      const supplied = String(request.headers.get('X-Cron-Secret') || '');
+      if (cfg.cronSecret && supplied && supplied === cfg.cronSecret) {
+        return await automaticExport(request, cfg, null);
+      }
+      const caller = await verifyAdmin(request, cfg);
+      return await automaticExport(request, cfg, caller);
     }
 
     const caller = await verifyAdmin(request, cfg);

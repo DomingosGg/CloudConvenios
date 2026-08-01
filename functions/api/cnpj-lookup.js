@@ -29,6 +29,25 @@ function formatPhone(value) {
   return clean(value, 100);
 }
 
+
+function formatCnaeCode(value) {
+  const raw = clean(value, 40);
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 7) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 5)}/${digits.slice(5)}`;
+  }
+  return raw;
+}
+
+function formatCnae(code, description) {
+  const formattedCode = formatCnaeCode(code);
+  const text = clean(description, 220);
+  if (formattedCode && text && formattedCode.toLowerCase() !== text.toLowerCase()) {
+    return `${formattedCode} — ${text}`;
+  }
+  return formattedCode || text;
+}
+
 function normalizeBrasilApi(raw) {
   return {
     cnpj: clean(raw.cnpj),
@@ -37,7 +56,7 @@ function normalizeBrasilApi(raw) {
     data_abertura: clean(raw.data_inicio_atividade),
     situacao_cadastral: clean(raw.descricao_situacao_cadastral),
     natureza_juridica: clean(raw.descricao_natureza_juridica),
-    cnae_principal: clean(first(raw.cnae_fiscal_descricao, raw.cnae_fiscal)),
+    cnae_principal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
     cep: clean(raw.cep),
     logradouro: clean([raw.descricao_tipo_de_logradouro, raw.logradouro].filter(Boolean).join(' ')),
     numero: clean(raw.numero),
@@ -61,7 +80,10 @@ function normalizeOpenCnpj(raw) {
     data_abertura: clean(first(raw.data_inicio_atividade, raw.data_abertura, raw.estabelecimento?.data_inicio_atividade)),
     situacao_cadastral: clean(first(raw.situacao_cadastral, raw.descricao_situacao_cadastral, raw.estabelecimento?.situacao_cadastral)),
     natureza_juridica: clean(first(raw.natureza_juridica?.descricao, raw.natureza_juridica, raw.empresa?.natureza_juridica?.descricao)),
-    cnae_principal: clean(first(principal.descricao, principal.texto, principal.codigo, principal)),
+    cnae_principal: formatCnae(
+      first(principal.codigo, principal.code, raw.cnae_codigo, raw.cnaeCodigo),
+      first(principal.descricao, principal.texto, principal.description, typeof principal === 'string' ? principal : '')
+    ),
     cep: clean(first(raw.cep, endereco.cep, raw.estabelecimento?.cep)),
     logradouro: clean(first(raw.logradouro, endereco.logradouro, raw.estabelecimento?.logradouro)),
     numero: clean(first(raw.numero, endereco.numero, raw.estabelecimento?.numero)),
@@ -83,7 +105,7 @@ function normalizeMinhaReceita(raw) {
     data_abertura: clean(raw.data_inicio_atividade),
     situacao_cadastral: clean(raw.descricao_situacao_cadastral),
     natureza_juridica: clean(raw.descricao_natureza_juridica),
-    cnae_principal: clean(first(raw.cnae_fiscal_descricao, raw.cnae_fiscal)),
+    cnae_principal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
     cep: clean(raw.cep),
     logradouro: clean([raw.descricao_tipo_de_logradouro, raw.logradouro].filter(Boolean).join(' ')),
     numero: clean(raw.numero),
@@ -106,7 +128,7 @@ function normalizeReceitaWs(raw) {
     data_abertura: clean(raw.abertura),
     situacao_cadastral: clean(raw.situacao),
     natureza_juridica: clean(raw.natureza_juridica),
-    cnae_principal: clean(first(atividade?.text, atividade?.code)),
+    cnae_principal: formatCnae(atividade?.code, atividade?.text),
     cep: clean(raw.cep),
     logradouro: clean(raw.logradouro),
     numero: clean(raw.numero),

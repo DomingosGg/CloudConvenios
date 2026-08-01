@@ -1,1 +1,1 @@
-﻿8.4.7 - Kanban lateral somente por clique e arraste
+﻿8.4.8 - Modelo corrigido, CNAE com código, Polo opcional e backups restaurados
