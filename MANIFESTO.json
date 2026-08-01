@@ -1,22 +1,26 @@
 {
-  "version": "8.4.2",
-  "generated_at": "2026-08-01T17:24:28.745969+00:00",
-  "purpose": "remove invalid refresh tokens and prevent manual refresh races",
+  "version": "8.4.5",
+  "generated_at": "2026-08-01T20:14:58.480390+00:00",
   "files": [
     {
-      "file": "CORRIGIR-REFRESH-TOKEN-V8.4.2.bat",
-      "size": 137,
-      "sha256": "f411c7480e46035ab6a5e57de592502db91693520ab362e5672479f140db2228"
+      "arquivo": "VERSAO.txt",
+      "tamanho": 114,
+      "sha256": "b7e335e282170416916b5932236b5adad92781a9adca3f6549fc68fa38014230"
     },
     {
-      "file": "CORRIGIR-REFRESH-TOKEN-V8.4.2.ps1",
-      "size": 13782,
-      "sha256": "2d621549a305ec3db0830cfad171a794f7fb87fccc994e293224f15895ffea51"
+      "arquivo": "app.js",
+      "tamanho": 123398,
+      "sha256": "f6e3996e9ff54e96d5dcaf8d23ed7ace3a7df97370b7b075c04d2525652204e6"
     },
     {
-      "file": "LEIA-ME.txt",
-      "size": 1089,
-      "sha256": "e52de58f12183bccf27ff3f4ec10ec8140bd63cdd04ed3ce3dea4d3a794d9d4b"
+      "arquivo": "index.html",
+      "tamanho": 382034,
+      "sha256": "685fb6a0c64c2e4a0d52979f9599c9d151bb5baee5f51c4179d4397701260dfa"
+    },
+    {
+      "arquivo": "js/app.js",
+      "tamanho": 123398,
+      "sha256": "f6e3996e9ff54e96d5dcaf8d23ed7ace3a7df97370b7b075c04d2525652204e6"
     }
   ]
 }

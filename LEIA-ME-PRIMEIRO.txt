@@ -1,0 +1,52 @@
+﻿ATUALIZAÇÃO MANUAL CLOUDCONVENIOS V8.4.5
+
+A versão V8.4.5 não foi enviada ao GitHub. Este pacote evita instaladores:
+basta copiar os arquivos para a pasta local do repositório.
+
+COMO APLICAR
+
+1. Extraia este ZIP.
+2. Abra o GitHub Desktop.
+3. Confirme que o repositório atual é CloudConvenios e a branch é main.
+4. Clique em Show in Explorer.
+5. Abra a pasta COPIAR-PARA-O-REPOSITORIO deste pacote.
+6. Copie TODO o conteúdo para a pasta CloudConvenios.
+7. Quando o Windows perguntar, escolha Substituir os arquivos no destino.
+8. Volte ao GitHub Desktop.
+
+O GitHub Desktop deverá mostrar, no mínimo:
+- index.html
+- app.js
+- js/app.js
+- VERSAO.txt
+
+9. No Summary, escreva:
+   Publicar importação somente com CNPJ V8.4.5
+10. Clique em Commit to main.
+11. Depois clique em Push origin.
+12. No GitHub pelo navegador, abra VERSAO.txt e confirme que aparece 8.4.5.
+13. Aguarde o novo deploy verde no Cloudflare.
+14. Abra o site e pressione Ctrl + F5.
+15. Selecione novamente a planilha.
+
+COMPORTAMENTO ESPERADO
+
+- A planilha pode conter apenas CNPJ.
+- O sistema consulta cada CNPJ antes da validação final.
+- Razão Social, Nome Fantasia, CNAE, situação cadastral, natureza jurídica,
+  endereço, cidade, Estado, telefone e e-mail são preenchidos quando disponíveis.
+- Polo vazio recebe automaticamente "Não informado".
+- A prévia é atualizada durante as consultas.
+- O botão de importação só é liberado depois da preparação.
+- CNPJs não encontrados ou inválidos permanecem como erro.
+
+COMO CONFIRMAR A PUBLICAÇÃO
+
+No GitHub:
+VERSAO.txt deve começar com 8.4.5.
+
+No código do index.html, deve existir:
+8.4.5-cnpj-only-import
+
+Se o Cloudflare não iniciar automaticamente um novo deploy:
+Cloudflare > Workers & Pages > cloudconvenios > Deployments > Retry deployment
