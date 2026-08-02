@@ -1,1 +1,1 @@
-﻿8.6.0 - Fluxo operacional completo, fila, qualidade, modelos e confirmaÃ§Ã£o de envio
+8.9.1 - Revisão completa da raiz, campos restaurados e estabilidade operacional

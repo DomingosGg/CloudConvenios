@@ -99,6 +99,42 @@
       return `<span class="badge ${cls}">${escapeHTML(status || '—')}</span>`;
     }
 
+    const LEGAL_NATURE_TYPES = Object.freeze(['Público','Privado','Não identificado']);
+
+    function classifyLegalNature(value = '') {
+      const raw = String(value || '').trim();
+      if (!raw) return 'Não identificado';
+      const digits = raw.replace(/\D/g, '').slice(0, 4);
+      if (/^1\d{3}$/.test(digits) || ['2011','2038'].includes(digits)) return 'Público';
+      const text = normalize(raw);
+      const publicTerms = [
+        'orgao publico','autarquia','fundacao publica','fundo publico','empresa publica',
+        'sociedade de economia mista','consorcio publico','estado ou distrito federal',
+        'municipio','uniao','comissao polinacional'
+      ];
+      if (publicTerms.some((term) => text.includes(term))) return 'Público';
+      if (digits.startsWith('5')) return 'Não identificado';
+      return 'Privado';
+    }
+
+    function legalNatureType(value, nature = '') {
+      return LEGAL_NATURE_TYPES.includes(value) ? value : classifyLegalNature(nature);
+    }
+
+    function legalNatureTypeBadge(value, nature = '') {
+      const type = legalNatureType(value, nature);
+      const cls = type === 'Público' ? 'badge-blue' : type === 'Privado' ? 'badge-success' : 'badge-muted';
+      return `<span class="badge ${cls}">${escapeHTML(type)}</span>`;
+    }
+
+    function runOptionalFeature(label, callback, fallback = undefined) {
+      try { return callback(); }
+      catch (error) {
+        console.error(`[CloudConvênios] Recurso opcional indisponível: ${label}`, error);
+        return fallback;
+      }
+    }
+
     const state = {
       data: { concedentes: [], theme: 'light', version: 1 },
       filtered: [],
@@ -173,6 +209,7 @@
         dataAbertura: company.dataAbertura || '',
         situacaoCadastral: company.situacaoCadastral || '',
         naturezaJuridica: company.naturezaJuridica || '',
+        tipoNatureza: legalNatureType(company.tipoNatureza || company.tipo_natureza || '', company.naturezaJuridica || ''),
         cnaePrincipal: company.cnaePrincipal || '',
         logradouro: company.logradouro || '',
         numero: company.numero || '',
@@ -324,12 +361,12 @@
     function toggleTheme() { state.data.theme = state.data.theme === 'dark' ? 'light' : 'dark'; saveData(); applyTheme(); toast('success','Tema alterado', state.data.theme === 'dark' ? 'Modo escuro ativado.' : 'Modo claro ativado.'); }
 
     function switchPanel(name) {
-      if(['configuracoes','auditoria','usuarios'].includes(name)&&!isAdmin()){toast('error','Acesso restrito','Somente o administrador pode acessar esta área.');name='dashboard';}
+      if(['configuracoes','auditoria','usuarios','saude'].includes(name)&&!isAdmin()){toast('error','Acesso restrito','Somente o administrador pode acessar esta área.');name='dashboard';}
       $$('.panel').forEach(p=>p.classList.remove('active'));
       $$('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.panel === name));
       const panel = $('#panel-' + name); if (panel) panel.classList.add('active');
       const meta = {
-        dashboard:['Dashboard','Visão geral dos convênios e atividades.'], concedentes:['Concedentes','Cadastro, filtros e acompanhamento das empresas.'], renovacoes:['Renovações','Fluxo Kanban do processo de renovação.'], contatos:['Contatos','Histórico e próximas ações de acompanhamento.'], fila:['Minha fila','Ações, prazos e prioridades do acompanhamento.'], qualidade:['Qualidade dos dados','Pendências cadastrais que precisam de correção.'], notificacoes:['Notificações','Alertas de vigência, contatos e acompanhamentos.'], relatorios:['Relatórios','Indicadores consolidados e análises.'], usuarios:['Usuários','Cadastro, bloqueio e gestão dos acessos.'], auditoria:['Auditoria','Histórico de ações, alterações e exclusões.'], configuracoes:['Configurações','Preferências e segurança dos dados.']
+        dashboard:['Dashboard','Visão geral dos convênios e atividades.'], concedentes:['Concedentes','Cadastro, filtros e acompanhamento das empresas.'], renovacoes:['Renovações','Fluxo Kanban do processo de renovação.'], contatos:['Contatos','Histórico e próximas ações de acompanhamento.'], fila:['Minha fila','Ações, prazos e prioridades do acompanhamento.'], qualidade:['Qualidade dos dados','Pendências cadastrais que precisam de correção.'], notificacoes:['Notificações','Alertas de vigência, contatos e acompanhamentos.'], relatorios:['Relatórios','Indicadores consolidados e análises.'], usuarios:['Usuários','Cadastro, bloqueio e gestão dos acessos.'], auditoria:['Auditoria','Histórico de ações, alterações e exclusões.'], saude:['Saúde do sistema','Disponibilidade das integrações e serviços.'], configuracoes:['Configurações','Preferências e segurança dos dados.']
       }[name];
       $('#pageTitle').textContent = meta[0]; $('#pageSubtitle').textContent = meta[1];
       if (window.innerWidth <= 900) $('#sidebar').classList.remove('mobile-open');
@@ -342,7 +379,8 @@
       if (name === 'notificacoes') window.notificationsPanel?.open();
       if (name === 'relatorios') renderReports();
       if (name === 'usuarios') window.userManagement?.open();
-      if (name === 'auditoria') window.auditPanel?.open();
+      if (name === 'auditoria') { window.auditPanel?.open(); setTimeout(ensureAuditComparisonNotice, 0); }
+      if (name === 'saude') renderSystemHealth();
       if (name === 'configuracoes') { renderSettings(); loadExportHistory(); }
     }
 
@@ -365,8 +403,21 @@
     function countBy(arr, getter) { return arr.reduce((acc,item)=>{ const k = getter(item) || 'Não informado'; acc[k]=(acc[k]||0)+1; return acc; },{}); }
     function latestContact(company) { return [...(company.contatos||[])].sort((a,b)=>`${b.data} ${b.horario}`.localeCompare(`${a.data} ${a.horario}`))[0] || null; }
 
+    // V8.6.1: filtros de marca nos painéis e Dashboard simplificado.
+    function selectedBrandFilter(selector) {
+      return normalizeBrand($(selector)?.value || '');
+    }
+
+    function filterCompaniesByBrand(companies, selector) {
+      const brand = selectedBrandFilter(selector);
+      return brand
+        ? companies.filter((company) => normalizeBrand(company.marca) === brand)
+        : companies;
+    }
+
+
     function renderDashboard() {
-      const data = state.data.concedentes.map(normalizeCompany);
+      const data = filterCompaniesByBrand(state.data.concedentes.map(normalizeCompany), '#dashboardBrandFilter');
       const metrics = [
         ['Total de concedentes',data.length,'fa-building','primary'],
         ['Convênios vigentes',data.filter(c=>c.situacaoVigencia==='Vigente').length,'fa-circle-check','success'],
@@ -389,27 +440,36 @@
       const upcoming = data.filter(c=>c.fimVigencia).sort((a,b)=>parseDate(a.fimVigencia)-parseDate(b.fimVigencia)).slice(0,7);
       $('#upcomingList').innerHTML = upcoming.length ? upcoming.map(c=>{ const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia); return `<li class="list-row"><span class="list-dot" style="background:${info.days < 0 ? '#dc2626' : info.days <= 30 ? '#f97316' : '#d9a200'}"></span><div class="list-main"><strong>${escapeHTML(c.nomeFantasia || c.razaoSocial)}</strong><small>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)} • ${badgeForVigencia(c.situacaoVigencia)}</small></div><div class="list-side">${formatDate(c.fimVigencia)}<br>${info.days < 0 ? `há ${Math.abs(info.days)} dias` : `em ${info.days} dias`}</div></li>`; }).join('') : emptyState('Nenhum vencimento informado','Cadastre datas finais para acompanhar os prazos.');
 
-      const activities = data.flatMap(c=>(c.contatos||[]).map(ct=>({...ct,company:c}))).sort((a,b)=>`${b.data} ${b.horario}`.localeCompare(`${a.data} ${a.horario}`)).slice(0,8);
-      $('#recentActivities').innerHTML = activities.length ? activities.map(a=>`<li class="list-row"><span class="list-dot"></span><div class="list-main"><strong>${escapeHTML(a.company.nomeFantasia || a.company.razaoSocial)}</strong><small>${escapeHTML(a.forma)} • ${escapeHTML(a.responsavel)} • ${escapeHTML(a.resultado)}</small></div><div class="list-side">${formatDateTime(a.data,a.horario)}</div></li>`).join('') : emptyState('Nenhuma atividade recente','Registre contatos para formar o histórico.');
       renderAlerts();
     }
 
     function emptyState(title, text) { return `<div class="empty-state"><i class="fa-regular fa-folder-open"></i><strong>${escapeHTML(title)}</strong><span>${escapeHTML(text)}</span></div>`; }
 
+    function setSelectOptions(id, values, current = '') {
+      const element = $(id);
+      if (!element) return;
+      const firstOption = element.options?.[0]?.outerHTML || '<option value="">Todos</option>';
+      const normalizedValues = [...new Set((values || []).filter(Boolean).map((value) => String(value).trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      element.innerHTML = firstOption + normalizedValues
+        .map((value) => `<option value="${escapeHTML(value)}" ${value === current ? 'selected' : ''}>${escapeHTML(value)}</option>`)
+        .join('');
+      if (current && normalizedValues.includes(current)) element.value = current;
+    }
+
     function updateFilterOptions() {
-      const setOptions = (id, values, current) => { const el=$(id); const first=el.options[0].outerHTML; el.innerHTML=first+[...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(v=>`<option ${v===current?'selected':''}>${escapeHTML(v)}</option>`).join(''); };
-      setOptions('#filterEstado',state.data.concedentes.map(c=>c.estado),$('#filterEstado').value);
-      setOptions('#filterCidade',state.data.concedentes.map(c=>c.cidade),$('#filterCidade').value);
-      setOptions('#filterPolo',state.data.concedentes.map(c=>c.polo),$('#filterPolo').value);
-      setOptions('#filterMarca',state.data.concedentes.map(c=>c.marca),$('#filterMarca')?.value || '');
-      if ($('#filterResponsavel')) setOptions('#filterResponsavel',state.data.concedentes.map(c=>normalizeCompany(c).responsavelOperacional),$('#filterResponsavel').value);
+      setSelectOptions('#filterEstado',state.data.concedentes.map(c=>c.estado),$('#filterEstado')?.value || '');
+      setSelectOptions('#filterCidade',state.data.concedentes.map(c=>c.cidade),$('#filterCidade')?.value || '');
+      setSelectOptions('#filterPolo',state.data.concedentes.map(c=>c.polo),$('#filterPolo')?.value || '');
+      setSelectOptions('#filterMarca',state.data.concedentes.map(c=>c.marca),$('#filterMarca')?.value || '');
+      setSelectOptions('#filterResponsavel',state.data.concedentes.map(c=>normalizeCompany(c).responsavelOperacional),$('#filterResponsavel')?.value || '');
     }
     function getFilteredCompanies() {
       const q = normalize($('#tableSearch').value);
       const filters = { vigencia:$('#filterVigencia').value, situacao:$('#filterSituacao').value, estado:$('#filterEstado').value, cidade:$('#filterCidade').value, polo:$('#filterPolo').value, marca:$('#filterMarca')?.value || '', responsavel:$('#filterResponsavel')?.value || '', prioridade:$('#filterPrioridade')?.value || '', forma:$('#filterForma').value, inicio:$('#filterInicio').value, fim:$('#filterFim').value, rapido:$('#filterRapido').value };
       const now = parseDate(todayISO());
       return state.data.concedentes.map(normalizeCompany).filter(c=>{
-        const hay = normalize([c.cnpj,c.razaoSocial,c.nomeFantasia,c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.cep,c.email,c.telefone,c.polo,c.marca,c.responsavelOperacional,c.prioridade,c.proximaAcao,c.proximaData,c.situacao,c.formasContato.join(' '),c.observacoes].join(' '));
+        const hay = normalize([c.cnpj,c.razaoSocial,c.nomeFantasia,c.situacaoCadastral,c.naturezaJuridica,c.tipoNatureza,c.cnaePrincipal,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.cep,c.email,c.telefone,c.polo,c.marca,c.responsavelOperacional,c.prioridade,c.proximaAcao,c.proximaData,c.situacao,c.formasContato.join(' '),c.observacoes].join(' '));
         if (q && !hay.includes(q)) return false;
         if (filters.vigencia && c.situacaoVigencia !== filters.vigencia) return false;
         if (filters.situacao && c.situacao !== filters.situacao) return false;
@@ -457,9 +517,9 @@
       $('#resultCount').textContent = `${total} ${total===1?'resultado':'resultados'}`;
       $('#paginationInfo').textContent = total ? `Exibindo ${start+1} a ${Math.min(start+state.pageSize,total)} de ${total}` : 'Nenhum registro encontrado';
       $('#companiesTableBody').innerHTML = rows.length ? rows.map(c=>`<tr>
-        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${escapeHTML(c.marca||'—')}</td><td>${escapeHTML(c.situacaoCadastral||'—')}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
+        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${escapeHTML(c.marca||'—')}</td><td>${escapeHTML(c.situacaoCadastral||'—')}</td><td class="td-truncate" title="${escapeHTML(c.naturezaJuridica||'')}">${escapeHTML(c.naturezaJuridica||'—')}</td><td>${legalNatureTypeBadge(c.tipoNatureza,c.naturezaJuridica)}</td><td class="td-truncate" title="${escapeHTML(c.cnaePrincipal||'')}">${escapeHTML(c.cnaePrincipal||'—')}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
         <td><div class="actions-cell"><button class="btn btn-secondary btn-icon action-view" data-id="${c.id}" title="Visualizar"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary btn-icon action-edit" data-id="${c.id}" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="btn btn-secondary btn-icon action-contact" data-id="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button><button class="btn btn-secondary btn-icon action-renew" data-id="${c.id}" title="Marcar como renovado"><i class="fa-solid fa-circle-check"></i></button><button class="btn btn-secondary btn-icon action-duplicate" data-id="${c.id}" title="Duplicar"><i class="fa-solid fa-copy"></i></button><button class="btn btn-danger btn-icon action-delete" data-id="${c.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button></div></td>
-      </tr>`).join('') : `<tr><td colspan="20">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="31">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
       renderPagination(pages); bindTableActions();
     }
     function renderPagination(pages) {
@@ -479,7 +539,7 @@
     }
 
     const CNPJ_FILL_FIELDS = [
-      'razaoSocial','nomeFantasia','dataAbertura','situacaoCadastral','naturezaJuridica','cnaePrincipal',
+      'razaoSocial','nomeFantasia','dataAbertura','situacaoCadastral','naturezaJuridica','tipoNatureza','cnaePrincipal',
       'email','telefone','cep','logradouro','numero','complemento','bairro','cidade','estado'
     ];
 
@@ -510,12 +570,31 @@
       setCnpjLookupStatus();
     }
 
+    function ensureLegalNatureClassificationUI() {
+      const natureField = $('#naturezaJuridica')?.closest('.field');
+      if (natureField && !$('#tipoNatureza')) {
+        natureField.insertAdjacentHTML('afterend', `<div class="field"><label>Público/Privado</label><input class="form-control" id="tipoNatureza" value="Não identificado" readonly/><span class="field-hint">Classificação automática conforme a natureza jurídica do CNPJ.</span></div>`);
+      }
+      const header = $('#companiesTableBody')?.closest('table')?.querySelector('thead tr');
+      if (header && !header.querySelector('[data-legal-nature-type]')) {
+        const statusHeader = [...header.children].find((cell) => normalize(cell.textContent) === 'situacao cadastral');
+        statusHeader?.insertAdjacentHTML('afterend','<th data-legal-nature-type="true" data-sort="tipoNatureza">Público/Privado</th>');
+      }
+    }
+
+    function updateLegalNatureClassification() {
+      const nature = $('#naturezaJuridica')?.value || '';
+      const field = $('#tipoNatureza');
+      if (field) field.value = classifyLegalNature(nature);
+    }
+
     function resetCompanyForm() {
       $('#companyForm').reset();
       $('#companyId').value = '';
       $('#dataCadastro').value = todayISO();
       $('#situacao').value = 'Não contatado';
       $('#estado').value = '';
+      if ($('#tipoNatureza')) $('#tipoNatureza').value = 'Não identificado';
       $$('input[name="marcaConvenio"]').forEach((input) => { input.checked = false; });
       $('#marcaConvenioGroup')?.classList.remove('invalid');
       $$('#companyForm .invalid').forEach((element) => element.classList.remove('invalid'));
@@ -646,6 +725,11 @@
         CNPJ_FILL_FIELDS.forEach((id) => {
           if (setFormValueFromApi(id, data[id])) populated += 1;
         });
+        const automaticType = legalNatureType(data.tipoNatureza || data.tipo_natureza || '', data.naturezaJuridica || $('#naturezaJuridica')?.value || '');
+        if ($('#tipoNatureza')) {
+          $('#tipoNatureza').value = automaticType;
+          $('#tipoNatureza').classList.add('api-autofilled');
+        }
         if (!$('#nomeFantasia')?.value.trim() && $('#razaoSocial')?.value.trim()) {
           populated += setFormValueFromApi('nomeFantasia', $('#razaoSocial').value) ? 1 : 0;
         }
@@ -805,6 +889,7 @@
         dataAbertura: $('#dataAbertura').value,
         situacaoCadastral: $('#situacaoCadastral').value.trim(),
         naturezaJuridica: $('#naturezaJuridica').value.trim(),
+        tipoNatureza: legalNatureType($('#tipoNatureza')?.value || '', $('#naturezaJuridica').value),
         cnaePrincipal: $('#cnaePrincipal').value.trim(),
         logradouro: $('#logradouro').value.trim(),
         numero: $('#numero').value.trim(),
@@ -903,6 +988,7 @@
         ['Situação cadastral', escapeHTML(company.situacaoCadastral || '—')],
         ['Data de abertura', formatDate(company.dataAbertura)],
         ['Natureza jurídica', escapeHTML(company.naturezaJuridica || '—')],
+        ['Público/Privado', legalNatureTypeBadge(company.tipoNatureza, company.naturezaJuridica)],
         ['CNAE principal', escapeHTML(company.cnaePrincipal || '—')],
         ['Endereço', escapeHTML(address || '—')],
         ['CEP', escapeHTML(company.cep || '—')],
@@ -925,7 +1011,34 @@
     }
     window.appOpenContact=(id)=>{closeModal('viewModalBackdrop');openContactForm(id);};
     function deleteCompany(id) { const c=state.data.concedentes.find(x=>x.id===id); if(!c||!ensureAdmin('excluir concedentes'))return; confirmAction('Excluir concedente',`Deseja excluir permanentemente “${c.nomeFantasia || c.razaoSocial}” e todo o histórico de contatos?`,async()=>{try{await window.remoteData.deleteCompany(id);state.data.concedentes=state.data.concedentes.filter(x=>x.id!==id);if(state.selectedContactCompanyId===id)state.selectedContactCompanyId=null;renderAll();applyAccessRules();toast('success','Cadastro excluído','A concedente foi removida do banco online.');}catch(error){toast('error','Falha ao excluir',error.message||'Não foi possível excluir o cadastro.');}}); }
-    function markRenewed(id) { const c=state.data.concedentes.find(x=>x.id===id); if(!c||!canEdit())return; confirmAction('Marcar como renovado',`Confirmar a renovação de “${c.nomeFantasia || c.razaoSocial}”?`,async()=>{try{await window.remoteData.updateCompanyStatus(id,'Renovado',c.formasContato);c.situacao='Renovado';c.updatedAt=new Date().toISOString();renderAll();applyAccessRules();toast('success','Renovação concluída','O cadastro foi marcado como Renovado.');}catch(error){toast('error','Falha ao atualizar',error.message||'Não foi possível atualizar a renovação.');}},false); }
+    function markRenewed(id) {
+      const company = state.data.concedentes.find((item) => item.id === id);
+      if (!company || !canEdit()) return;
+      confirmAction('Marcar como renovado', `Confirmar a renovação de “${company.nomeFantasia || company.razaoSocial}”?`, async () => {
+        const previous = company.situacao;
+        try {
+          await window.remoteData.updateCompanyStatus(id, 'Renovado', company.formasContato);
+          company.situacao = 'Renovado';
+          company.updatedAt = new Date().toISOString();
+          renderAll();
+          applyAccessRules();
+          toast('success', 'Renovação concluída', 'O cadastro foi marcado como Renovado.');
+        } catch (error) {
+          company.situacao = previous;
+          renderAll();
+          applyAccessRules();
+          toast('error', 'Falha ao atualizar', error.message || 'Não foi possível atualizar a renovação.');
+          return;
+        }
+        try {
+          await applyAutomaticFlowRule(company, 'situacao_alterada', previous);
+          await loadRemoteData({ silent: true });
+        } catch (error) {
+          console.warn('[Fluxo automático após renovação]', error);
+          toast('warning', 'Renovação salva', 'A renovação foi concluída, mas a regra automática complementar não pôde ser aplicada.');
+        }
+      }, false);
+    }
 
     async function lookupCEP() {
       return applyCepAddressAutomatically($('#cep').value, { manual: true });
@@ -1417,8 +1530,60 @@
 
     function renderKanban() {
       $('#kanbanBoard').innerHTML=kanbanStages.map(stage=>{const companies=state.data.concedentes.filter(c=>c.situacao===stage);return `<section class="kanban-column" data-stage="${stage}"><div class="kanban-head"><strong>${stage}</strong><span class="kanban-count">${companies.length}</span></div><div class="kanban-list">${companies.map(c=>{const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia);const lc=latestContact(c);return `<article class="kanban-card" draggable="true" data-id="${c.id}"><h4>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</h4><div class="company-name">${escapeHTML(c.razaoSocial)}</div><div class="kanban-info"><div>CNPJ<strong>${escapeHTML(c.cnpj||'—')}</strong></div><div>Localização<strong>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)}</strong></div><div>Polo<strong>${escapeHTML(c.polo||'—')}</strong></div><div>Marca<strong>${escapeHTML(c.marca||'—')}</strong></div><div>Fim da vigência<strong>${formatDate(c.fimVigencia)}</strong></div><div>Dias restantes<strong>${info.days===null?'—':info.days}</strong></div><div>Último contato<strong>${lc?formatDate(lc.data):'—'}</strong></div></div><div class="kanban-footer"><span class="badge ${info.days!==null&&info.days<0?'badge-danger':info.days!==null&&info.days<=30?'badge-orange':'badge-muted'}">${info.days===null?'Sem data':info.days<0?'Vencido':`${info.days} dias`}</span><div style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" data-kanban-contact="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button>${supportsStandardOutlookMessage(c)?`<button class="btn btn-sm btn-secondary" data-kanban-outlook="${c.id}" title="Preparar recado no Outlook"><i class="fa-solid fa-envelope"></i></button>`:''}</div></div>${lc&&lc.proximaAcao?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Próxima ação: ${escapeHTML(lc.proximaAcao)}</div>`:''}</article>`;}).join('')}</div></section>`;}).join('');
-      $$('.kanban-card').forEach(card=>{card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',card.dataset.id);card.style.opacity='.55';});card.addEventListener('dragend',()=>card.style.opacity='1');});
-      $$('.kanban-column').forEach(col=>{col.addEventListener('dragover',e=>{if(!canEdit())return;e.preventDefault();col.classList.add('drag-over');});col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drag-over');if(!canEdit()){toast('error','Acesso restrito','Seu perfil não pode movimentar o Kanban.');return;}const id=e.dataTransfer.getData('text/plain');const c=state.data.concedentes.find(x=>x.id===id);if(c&&c.situacao!==col.dataset.stage){const previous=c.situacao;c.situacao=col.dataset.stage;renderAll();applyAccessRules();try{await window.remoteData.updateCompanyStatus(id,col.dataset.stage,c.formasContato);toast('success','Etapa atualizada',`O cartão foi movido para “${col.dataset.stage}”.`);}catch(error){c.situacao=previous;renderAll();applyAccessRules();toast('error','Falha ao mover cartão',error.message||'Não foi possível atualizar a etapa.');}}});});
+      $$('.kanban-card').forEach((card) => {
+        card.addEventListener('dragstart', (event) => {
+          if (!canEdit() || maintenanceBlocksWrites()) {
+            event.preventDefault();
+            ensureOperationalWrite('movimentar o Kanban');
+            return;
+          }
+          event.dataTransfer.setData('text/plain', card.dataset.id);
+          card.style.opacity = '.55';
+        });
+        card.addEventListener('dragend', () => { card.style.opacity = '1'; });
+      });
+      $$('.kanban-column').forEach((column) => {
+        column.addEventListener('dragover', (event) => {
+          if (!canEdit() || maintenanceBlocksWrites()) return;
+          event.preventDefault();
+          column.classList.add('drag-over');
+        });
+        column.addEventListener('dragleave', () => column.classList.remove('drag-over'));
+        column.addEventListener('drop', async (event) => {
+          event.preventDefault();
+          column.classList.remove('drag-over');
+          if (!canEdit()) {
+            toast('error', 'Acesso restrito', 'Seu perfil não pode movimentar o Kanban.');
+            return;
+          }
+          if (!ensureOperationalWrite('movimentar o Kanban')) return;
+          const id = event.dataTransfer.getData('text/plain');
+          const company = state.data.concedentes.find((item) => item.id === id);
+          const destination = column.dataset.stage;
+          if (!company || company.situacao === destination) return;
+          const previous = company.situacao;
+          try {
+            await window.remoteData.updateCompanyStatus(id, destination, company.formasContato);
+            company.situacao = destination;
+            renderAll();
+            applyAccessRules();
+            toast('success', 'Etapa atualizada', `O cartão foi movido para “${destination}”.`);
+          } catch (error) {
+            company.situacao = previous;
+            renderAll();
+            applyAccessRules();
+            toast('error', 'Falha ao mover cartão', error.message || 'Não foi possível atualizar a etapa.');
+            return;
+          }
+          try {
+            await applyAutomaticFlowRule(company, 'situacao_alterada', previous);
+            await loadRemoteData({ silent: true });
+          } catch (error) {
+            console.warn('[Fluxo automático após Kanban]', error);
+            toast('warning', 'Etapa salva', 'O Kanban foi atualizado, mas a regra automática complementar não pôde ser aplicada.');
+          }
+        });
+      });
       $$('[data-kanban-contact]').forEach(b=>b.onclick=e=>{e.stopPropagation();openContactForm(b.dataset.kanbanContact);});
       $$('[data-kanban-outlook]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openOutlookMessage(b.dataset.kanbanOutlook);});
       const board = $('#kanbanBoard');
@@ -1516,9 +1681,9 @@
     }
     function refreshChartsIfVisible(){setTimeout(()=>{const active=$('.panel.active')?.id;if(active==='panel-dashboard')renderDashboard();if(active==='panel-relatorios')renderReports();},30);}
 
-    const CSV_HEADERS = ['Situação da Vigência','CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral','Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro','Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone','Polo','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro','Vigência','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ','Observações'];
+    const CSV_HEADERS = ['Situação da Vigência','CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral','Natureza Jurídica','Público/Privado','CNAE Principal (código e descrição)','CEP','Logradouro','Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone','Polo','Responsável pelo acompanhamento','Prioridade','Etiquetas','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro','Vigência','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ','Observações'];
     function csvEscape(value){const s=String(value??'').replace(/"/g,'""');return /[;"\n\r]/.test(s)?`"${s}"`:s;}
-    function companyToCsvRow(c){return [c.situacaoVigencia,c.cnpj,c.razaoSocial,c.nomeFantasia,c.marca,formatDate(c.dataAbertura),c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.cep,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.email,c.telefone,c.polo,formatDate(c.inicioVigencia),formatDate(c.fimVigencia),c.diasRestantes??'',formatDate(c.dataCadastro),c.vigenciaResumo,c.situacao,c.formasContato.join(', '),c.fonteCnpj,c.consultadoEm?new Date(c.consultadoEm).toLocaleString('pt-BR'):'',c.observacoes];}
+    function companyToCsvRow(c){return [c.situacaoVigencia,c.cnpj,c.razaoSocial,c.nomeFantasia,c.marca,formatDate(c.dataAbertura),c.situacaoCadastral,c.naturezaJuridica,legalNatureType(c.tipoNatureza,c.naturezaJuridica),c.cnaePrincipal,c.cep,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.email,c.telefone,c.polo,c.responsavelAcompanhamento||'',c.prioridade||'Média',normalizeTags(c.etiquetas).join(', '),formatDate(c.inicioVigencia),formatDate(c.fimVigencia),c.diasRestantes??'',formatDate(c.dataCadastro),c.vigenciaResumo,c.situacao,c.formasContato.join(', '),c.fonteCnpj,c.consultadoEm?new Date(c.consultadoEm).toLocaleString('pt-BR'):'',c.observacoes];}
 
     function formatBytes(bytes) {
       const value = Number(bytes || 0);
@@ -1676,7 +1841,7 @@
       const blob = workbookBlob([{
         name: 'Concedentes',
         rows: [CSV_HEADERS, ...rows.map(companyToCsvRow)],
-        widths: [23,19,34,28,16,22,28,24,12,28,10,20,20,10,22,30,18,22,18,18,16,18,24,24,28,24,24,34]
+        widths: [23,19,34,28,16,22,28,24,16,38,12,28,10,20,20,10,22,30,18,20,28,14,34,18,18,16,18,24,24,28,24,24,40]
       }]);
       closeModal('exportModalBackdrop');
       await completeSpreadsheetDownload(blob, filename, `concedentes-${mode}`, rows.length);
@@ -1952,9 +2117,13 @@
       razaoSocial: ['razaosocial','razao','nomerazao'],
       nomeFantasia: ['nomefantasia','fantasia'],
       marca: ['marca','marcadoconvenio','instituicao','ies'],
+      responsavelAcompanhamento: ['responsavelpeloacompanhamento','responsavelacompanhamento','responsavel','operador'],
+      prioridade: ['prioridade'],
+      etiquetas: ['etiquetas','tags','marcadores'],
       dataAbertura: ['datadeabertura','dataabertura','abertura'],
       situacaoCadastral: ['situacaocadastral','statuscadastral'],
       naturezaJuridica: ['naturezajuridica'],
+      tipoNatureza: ['publicoprivado','tiponatureza','classificacaojuridica','setorjuridico'],
       cnaePrincipal: ['cnaeprincipal','cnaeprincipalcodigoedescricao','cnaecodigoedescricao','cnae','atividadeprincipal'],
       cep: ['cep'],
       logradouro: ['logradouro','endereco','rua','avenida'],
@@ -2024,9 +2193,13 @@
           razaoSocial: importCellText(raw('razaoSocial')),
           nomeFantasia: importCellText(raw('nomeFantasia')),
           marca: normalizeBrand(importCellText(raw('marca'))),
+          responsavelAcompanhamento: importCellText(raw('responsavelAcompanhamento')),
+          prioridade: ['Baixa','Média','Alta','Urgente'].includes(importCellText(raw('prioridade'))) ? importCellText(raw('prioridade')) : 'Média',
+          etiquetas: normalizeTags(importCellText(raw('etiquetas'))),
           dataAbertura: importDateToISO(raw('dataAbertura')),
           situacaoCadastral: importCellText(raw('situacaoCadastral')),
           naturezaJuridica: importCellText(raw('naturezaJuridica')),
+          tipoNatureza: legalNatureType(importCellText(raw('tipoNatureza')), importCellText(raw('naturezaJuridica'))),
           cnaePrincipal: importCellText(raw('cnaePrincipal')),
           cep: importCellText(raw('cep')),
           logradouro: importCellText(raw('logradouro')),
@@ -2367,8 +2540,8 @@
     }
 
     const IMPORT_TEMPLATE_HEADERS = [
-      'CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral',
-      'Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro',
+      'CNPJ','Razão Social','Nome Fantasia','Marca','Responsável pelo acompanhamento','Prioridade','Etiquetas',
+      'Data de Abertura','Situação Cadastral','Natureza Jurídica','Público/Privado','CNAE Principal (código e descrição)','CEP','Logradouro',
       'Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone',
       'Polo (opcional)','Início da Vigência','Fim da Vigência','Data do Cadastro',
       'Situação','Forma de Contato','Observações'
@@ -2379,6 +2552,9 @@
         ['Campo','Orientação','Obrigatório?'],
         ['CNPJ','Pode ser a única informação preenchida quando a complementação por CNPJ estiver ativada.','Sim para consulta automática'],
         ['Marca','Selecione Uniasselvi ou Unicesumar. A marca será usada automaticamente nos recados do Outlook.','Sim para os recados'],
+        ['Responsável','Nome do usuário responsável pelo acompanhamento. Pode ficar vazio para entrar na fila Sem responsável.','Não'],
+        ['Prioridade','Use Baixa, Média, Alta ou Urgente.','Não'],
+        ['Etiquetas','Separe etiquetas por vírgula, por exemplo: Procon, Grande parceiro.','Não'],
         ['CNAE','O sistema grava o código junto da descrição quando a fonte pública disponibilizar.','Não'],
         ['Polo','Campo opcional. Pode permanecer vazio.','Não'],
         ['Datas','Use DD/MM/AAAA ou uma data válida do Excel.','Não'],
@@ -2388,7 +2564,7 @@
         {
           name: 'Importação',
           rows: [IMPORT_TEMPLATE_HEADERS],
-          widths: [20,32,28,18,16,22,28,34,12,28,10,20,20,10,22,30,18,20,18,18,18,24,24,40]
+          widths: [20,32,28,18,28,14,34,16,22,28,16,38,12,28,10,20,20,10,22,30,18,20,18,18,18,24,24,40]
         },
         {
           name: 'Instruções',
@@ -2970,6 +3146,8 @@
           .workflow-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.workflow-card{padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
           .workflow-card span{display:block;color:var(--muted);font-size:10px}.workflow-card strong{font-size:22px}.workflow-card button{margin-top:9px}
           .workflow-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:14px}.workflow-toolbar .field{min-width:170px;flex:1}
+          .workflow-brand-filter{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+          .workflow-brand-filter label{font-size:10px;color:var(--muted);white-space:nowrap}.workflow-brand-filter select{min-width:150px}
           .workflow-table td{vertical-align:top}.workflow-table small{display:block;color:var(--muted);margin-top:4px}.workflow-actions{display:flex;gap:6px;flex-wrap:wrap}
           .workflow-due-overdue{color:#b91c1c;font-weight:700}.workflow-due-today{color:#d97706;font-weight:700}.workflow-due-upcoming{color:#1d4ed8;font-weight:700}
           .quality-tags{display:flex;flex-wrap:wrap;gap:5px}.quality-tag{font-size:9px;padding:4px 7px;border-radius:999px;background:rgba(220,38,38,.08);color:#b91c1c;border:1px solid rgba(220,38,38,.16)}
@@ -2989,7 +3167,7 @@
       }
       const reportsNav = $('.nav-item[data-panel="relatorios"]');
       if (reportsNav && !$('.nav-item[data-panel="qualidade"]')) {
-        reportsNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="qualidade"><i class="fa-solid fa-list-circle-check"></i><span class="nav-label">Qualidade dos dados</span></button>');
+        reportsNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="qualidade"><i class="fa-solid fa-circle-check"></i><span class="nav-label">Qualidade dos dados</span></button>');
       }
 
       const panelsHost = $('#panel-dashboard')?.parentElement;
@@ -3001,6 +3179,7 @@
             <div class="card" style="margin-top:14px">
               <div class="workflow-toolbar">
                 <div class="field"><label>Responsabilidade</label><select class="form-control" id="queueScope"><option value="mine">Minha fila</option><option value="all">Todos</option><option value="unassigned">Sem responsável</option></select></div>
+                <div class="field"><label>Marca</label><select class="form-control" id="queueBrand"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>
                 <div class="field"><label>Prazo</label><select class="form-control" id="queueDue"><option value="">Todos os prazos</option><option value="atrasado">Atrasados</option><option value="hoje">Para hoje</option><option value="proximos-7">Próximos 7 dias</option><option value="sem-data">Sem data definida</option></select></div>
                 <div class="field"><label>Prioridade</label><select class="form-control" id="queuePriority"><option value="">Todas</option><option>Urgente</option><option>Alta</option><option>Média</option><option>Baixa</option></select></div>
                 <div class="field"><label>Pesquisar</label><input class="form-control" id="queueSearch" placeholder="Empresa, cidade, ação..." /></div>
@@ -3014,6 +3193,7 @@
             <div class="card" style="margin-top:14px">
               <div class="workflow-toolbar">
                 <div class="field"><label>Tipo de pendência</label><select class="form-control" id="qualityIssueFilter"><option value="">Todas</option><option value="email">E-mail</option><option value="telefone">Telefone</option><option value="marca">Marca</option><option value="vigencia">Vigência</option><option value="cnpj">CNPJ</option><option value="contatos">Contatos</option><option value="situacao-cadastral">Situação cadastral</option><option value="endereco">Endereço</option><option value="responsavel">Responsável</option></select></div>
+                <div class="field"><label>Marca</label><select class="form-control" id="qualityBrand"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>
                 <div class="field"><label>Pesquisar</label><input class="form-control" id="qualitySearch" placeholder="Empresa, CNPJ ou cidade..." /></div>
               </div>
               <div class="table-wrap"><table class="workflow-table"><thead><tr><th>Concedente</th><th>Marca</th><th>Localização</th><th>Pendências</th><th>Ação</th></tr></thead><tbody id="qualityTableBody"></tbody></table></div>
@@ -3021,13 +3201,20 @@
           </section>`);
       }
 
+      const dashboardActions = $('#panel-dashboard .panel-header .panel-actions');
+      if (dashboardActions && !$('#dashboardBrandFilter')) {
+        dashboardActions.insertAdjacentHTML(
+          'afterbegin',
+          '<div class="workflow-brand-filter"><label for="dashboardBrandFilter">Marca</label><select class="form-control" id="dashboardBrandFilter"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>'
+        );
+      }
       if ($('#dashboardMetrics') && !$('#brandDashboardSummary')) {
         $('#dashboardMetrics').insertAdjacentHTML('afterend', '<div id="brandDashboardSummary" class="workflow-brand-grid"></div>');
       }
-      const recentCard = $('#recentActivities')?.closest('.card');
-      if (recentCard && !$('#backupDashboardMonitor')) {
-        recentCard.insertAdjacentHTML('afterend', '<div class="card" id="backupDashboardMonitor" data-admin-only style="margin-top:16px"></div>');
-      }
+      $('#recentActivities')?.closest('.card')?.remove();
+      $('#backupDashboardMonitor')?.remove();
+      const qualityNavIcon = $('.nav-item[data-panel="qualidade"] i');
+      if (qualityNavIcon) qualityNavIcon.className = 'fa-solid fa-circle-check';
 
       const companyGrid = $('#companyForm .form-grid');
       const brandField = $('#marcaConvenioGroup')?.closest('.field');
@@ -3145,13 +3332,14 @@
     renderDashboard = function() {
       baseRenderDashboardV860();
       renderBrandDashboard();
-      renderBackupDashboardMonitor();
     };
 
     function renderBrandDashboard() {
       const holder = $('#brandDashboardSummary');
       if (!holder) return;
-      holder.innerHTML = marcasConvenio.map((brand) => {
+      const selectedBrand = selectedBrandFilter('#dashboardBrandFilter');
+      const visibleBrands = selectedBrand ? [selectedBrand] : marcasConvenio;
+      holder.innerHTML = visibleBrands.map((brand) => {
         const rows = state.data.concedentes.map(normalizeCompany).filter((item) => item.marca === brand);
         const renewed = rows.filter((item) => item.situacao === 'Renovado').length;
         const pending = rows.filter((item) => !closedWorkflowStatuses.has(item.situacao)).length;
@@ -3242,10 +3430,12 @@
       if (!holder) return;
       const currentName = String(window.currentUser?.nome || '').trim();
       const scope = $('#queueScope')?.value || 'mine';
+      const brand = selectedBrandFilter('#queueBrand');
       const due = $('#queueDue')?.value || '';
       const priority = $('#queuePriority')?.value || '';
       const search = normalize($('#queueSearch')?.value || '');
       let rows = state.data.concedentes.map(normalizeCompany).filter((company) => !closedWorkflowStatuses.has(company.situacao));
+      if (brand) rows = rows.filter((company) => normalizeBrand(company.marca) === brand);
       if (scope === 'mine') rows = rows.filter((company) => normalize(company.responsavelOperacional) === normalize(currentName));
       if (scope === 'unassigned') rows = rows.filter((company) => !company.responsavelOperacional);
       if (due) rows = rows.filter((company) => workflowDateInfo(company).category === due);
@@ -3256,7 +3446,10 @@
         if (priorityCompare) return priorityCompare;
         return String(a.proximaData || '9999-12-31').localeCompare(String(b.proximaData || '9999-12-31'));
       });
-      const allOpen = state.data.concedentes.map(normalizeCompany).filter((company) => !closedWorkflowStatuses.has(company.situacao));
+      const allOpen = state.data.concedentes
+        .map(normalizeCompany)
+        .filter((company) => !closedWorkflowStatuses.has(company.situacao))
+        .filter((company) => !brand || normalizeBrand(company.marca) === brand);
       const metrics = [
         ['Atrasados',allOpen.filter((c)=>workflowDateInfo(c).category==='atrasado').length,'fa-triangle-exclamation'],
         ['Para hoje',allOpen.filter((c)=>workflowDateInfo(c).category==='hoje').length,'fa-calendar-day'],
@@ -3275,8 +3468,12 @@
       const holder = $('#qualityTableBody');
       if (!holder) return;
       const issueFilter = $('#qualityIssueFilter')?.value || '';
+      const brand = selectedBrandFilter('#qualityBrand');
       const search = normalize($('#qualitySearch')?.value || '');
-      const records = state.data.concedentes.map(normalizeCompany).map((company) => ({ company, issues: dataQualityIssues(company) }));
+      const records = state.data.concedentes
+        .map(normalizeCompany)
+        .filter((company) => !brand || normalizeBrand(company.marca) === brand)
+        .map((company) => ({ company, issues: dataQualityIssues(company) }));
       const withIssues = records.filter((item) => item.issues.length);
       const filtered = withIssues.filter((item) => {
         if (issueFilter && !item.issues.some((issue) => issue.key === issueFilter)) return false;
@@ -3475,10 +3672,11 @@
       $('#emailSentBtn')?.addEventListener('click', () => confirmOutlookEmail(true));
       $('#emailNotSentBtn')?.addEventListener('click', () => confirmOutlookEmail(false));
       $('#refreshEmailTemplates')?.addEventListener('click', () => loadEmailTemplates({ silent: false }));
-      ['queueScope','queueDue','queuePriority'].forEach((id)=>$('#'+id)?.addEventListener('change',renderWorkQueue));
+      ['queueScope','queueBrand','queueDue','queuePriority'].forEach((id)=>$('#'+id)?.addEventListener('change',renderWorkQueue));
       $('#queueSearch')?.addEventListener('input',renderWorkQueue);
-      $('#qualityIssueFilter')?.addEventListener('change',renderDataQuality);
+      ['qualityIssueFilter','qualityBrand'].forEach((id)=>$('#'+id)?.addEventListener('change',renderDataQuality));
       $('#qualitySearch')?.addEventListener('input',renderDataQuality);
+      $('#dashboardBrandFilter')?.addEventListener('change',renderDashboard);
       document.addEventListener('click', (event) => {
         const templateButton = event.target.closest?.('[data-edit-template]');
         if (templateButton) return openEmailTemplateEditor(templateButton.dataset.editTemplate);
@@ -3527,7 +3725,6 @@
       if (active === 'fila') renderWorkQueue();
       if (active === 'qualidade') renderDataQuality();
       renderEmailTemplatesSettings();
-      renderBackupDashboardMonitor();
     };
 
     const baseBuildBackupPayloadV860 = buildBackupPayload;
@@ -3538,6 +3735,1770 @@
       payload.modelosEmail = allEmailTemplates().filter((item) => !item.fallback);
       return payload;
     };
+
+
+    // =====================================================================
+    // V8.7.0 — PRODUTIVIDADE, CONTROLE DE EDIÇÃO E GESTÃO
+    // =====================================================================
+
+    state.bulkSelectedIds = state.bulkSelectedIds || new Set();
+    state.savedFilters = state.savedFilters || [];
+    state.savedFiltersLoading = false;
+    state.activeEditLock = null;
+    state.editLockTimer = null;
+    state.managementReportRows = [];
+    state.healthLastRun = null;
+
+    const advancedPriorityValues = Object.freeze(['Baixa','Média','Alta','Urgente']);
+    const editLockTtlSeconds = 150;
+    const editLockRefreshMs = 45000;
+
+    function advancedStyles() {
+      if ($('#v870Styles')) return;
+      const style = document.createElement('style');
+      style.id = 'v870Styles';
+      style.textContent = `
+        .bulk-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px;margin-bottom:10px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+        .bulk-toolbar.hidden{display:none}
+        .bulk-toolbar strong{font-size:12px}
+        .bulk-toolbar .bulk-spacer{flex:1}
+        .bulk-check-cell{width:42px;text-align:center}
+        .bulk-check-cell input{width:16px;height:16px;accent-color:var(--primary)}
+        .saved-filter-bar{display:flex;align-items:end;gap:8px;flex-wrap:wrap;padding:10px 12px;margin-bottom:12px;border:1px dashed var(--border);border-radius:12px;background:var(--surface-soft)}
+        .saved-filter-bar .field{min-width:210px;flex:1}
+        .edit-lock-banner{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;margin-bottom:12px;border-radius:12px;border:1px solid rgba(8,145,178,.24);background:rgba(8,145,178,.08)}
+        .edit-lock-banner.warning{border-color:rgba(220,38,38,.28);background:rgba(220,38,38,.08)}
+        .edit-lock-banner i{margin-top:2px;color:#0891b2}
+        .edit-lock-banner.warning i{color:var(--danger)}
+        .edit-lock-banner strong,.edit-lock-banner span{display:block}
+        .edit-lock-banner span{font-size:11px;color:var(--muted);margin-top:3px}
+        .management-report-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}
+        .management-report-filters{display:grid;grid-template-columns:repeat(6,minmax(135px,1fr));gap:10px;align-items:end}
+        .health-grid{display:grid;grid-template-columns:repeat(3,minmax(190px,1fr));gap:12px}
+        .health-card{border:1px solid var(--border);border-radius:14px;padding:15px;background:var(--surface);display:grid;gap:8px}
+        .health-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+        .health-card-head i{font-size:18px;color:var(--muted)}
+        .health-card small{color:var(--muted);line-height:1.45}
+        .health-status-ok{color:var(--success)}
+        .health-status-warning{color:var(--warning)}
+        .health-status-error{color:var(--danger)}
+        .audit-comparison-notice{margin-bottom:14px}
+        .saved-view-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+        .saved-view-chip{border:1px solid var(--border);background:var(--surface);padding:6px 9px;border-radius:999px;font-size:11px;cursor:pointer}
+        .saved-view-chip:hover{border-color:var(--primary)}
+        @media(max-width:1150px){
+          .management-report-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}
+          .management-report-filters{grid-template-columns:repeat(3,minmax(150px,1fr))}
+          .health-grid{grid-template-columns:repeat(2,minmax(190px,1fr))}
+        }
+        @media(max-width:700px){
+          .management-report-grid,.management-report-filters,.health-grid{grid-template-columns:1fr}
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    function ensureAdvancedManagementUI() {
+      advancedStyles();
+
+      const auditNav = $('.nav-item[data-panel="auditoria"]');
+      if (auditNav && !$('.nav-item[data-panel="saude"]')) {
+        auditNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="saude" data-admin-only><i class="fa-solid fa-heart-pulse"></i><span class="nav-label">Saúde do sistema</span></button>');
+      }
+
+      const panelsHost = $('#panel-dashboard')?.parentElement;
+      if (!$('#panel-saude')) {
+        panelsHost.insertAdjacentHTML('beforeend', `
+          <section class="panel" id="panel-saude">
+            <div class="panel-header"><div><h2>Saúde do sistema</h2><p>Verifique a conexão, as integrações e o último backup.</p></div><div class="panel-actions"><button class="btn btn-primary" id="runHealthChecks" type="button"><i class="fa-solid fa-rotate"></i>Testar serviços</button></div></div>
+            <div class="health-grid" id="healthGrid"></div>
+            <div class="card" style="margin-top:14px">
+              <div class="card-title"><div><h3>Informações técnicas</h3><span>Resumo da versão e da sessão atual</span></div></div>
+              <div id="healthTechnicalInfo"></div>
+            </div>
+          </section>`);
+      }
+
+      const companiesTable = $('#companiesTableBody')?.closest('table');
+      const tableWrap = companiesTable?.closest('.table-wrap');
+      if (tableWrap && !$('#bulkActionsToolbar')) {
+        tableWrap.insertAdjacentHTML('beforebegin', `
+          <div class="bulk-toolbar hidden" id="bulkActionsToolbar">
+            <strong><span id="bulkSelectedCount">0</span> concedente(s) selecionada(s)</strong>
+            <button class="btn btn-primary btn-sm" id="bulkOpenActions" type="button"><i class="fa-solid fa-wand-magic-sparkles"></i>Aplicar ações</button>
+            <button class="btn btn-secondary btn-sm" id="bulkExportSelected" type="button" data-admin-only><i class="fa-solid fa-file-excel"></i>Exportar selecionados</button>
+            <span class="bulk-spacer"></span>
+            <button class="btn btn-secondary btn-sm" id="bulkClearSelection" type="button"><i class="fa-solid fa-xmark"></i>Limpar seleção</button>
+          </div>`);
+      }
+
+      const filterCard = $('#filtersCard');
+      if (filterCard && !$('#savedCompanyFilters')) {
+        const target = filterCard.querySelector('.filters-grid') || filterCard.firstElementChild;
+        target?.insertAdjacentHTML('beforebegin', `
+          <div class="saved-filter-bar">
+            <div class="field"><label>Visualização salva</label><select class="form-control" id="savedCompanyFilters"><option value="">Selecione um filtro salvo</option></select></div>
+            <button class="btn btn-secondary btn-sm" id="saveCompanyFilter" type="button"><i class="fa-solid fa-bookmark"></i>Salvar filtros atuais</button>
+            <button class="btn btn-danger btn-sm" id="deleteCompanyFilter" type="button"><i class="fa-solid fa-trash"></i>Excluir</button>
+          </div>`);
+      }
+
+      const queueCard = $('#queueTableBody')?.closest('.card');
+      if (queueCard && !$('#savedQueueFilters')) {
+        const toolbar = queueCard.querySelector('.workflow-toolbar');
+        toolbar?.insertAdjacentHTML('beforebegin', `
+          <div class="saved-filter-bar">
+            <div class="field"><label>Atalho salvo</label><select class="form-control" id="savedQueueFilters"><option value="">Selecione uma fila salva</option></select></div>
+            <button class="btn btn-secondary btn-sm" id="saveQueueFilter" type="button"><i class="fa-solid fa-bookmark"></i>Salvar fila atual</button>
+            <button class="btn btn-danger btn-sm" id="deleteQueueFilter" type="button"><i class="fa-solid fa-trash"></i>Excluir</button>
+          </div>`);
+      }
+
+      const reportsPanel = $('#panel-relatorios');
+      if (reportsPanel && !$('#managementReportCard')) {
+        reportsPanel.insertAdjacentHTML('beforeend', `
+          <section class="card" id="managementReportCard" style="margin-top:16px">
+            <div class="card-title"><div><h3>Relatório gerencial por período</h3><span>Desempenho por marca, responsável, localidade e situação</span></div><div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn btn-secondary btn-sm" id="exportManagementReport" type="button" data-admin-only><i class="fa-solid fa-file-excel"></i>Exportar Excel</button><button class="btn btn-secondary btn-sm" id="printManagementReport" type="button"><i class="fa-solid fa-print"></i>Imprimir / PDF</button></div></div>
+            <div class="management-report-filters">
+              <div class="field"><label>Data inicial</label><input class="form-control" id="managementStartDate" type="date" /></div>
+              <div class="field"><label>Data final</label><input class="form-control" id="managementEndDate" type="date" /></div>
+              <div class="field"><label>Marca</label><select class="form-control" id="managementBrand"><option value="">Ambas</option><option>Uniasselvi</option><option>Unicesumar</option></select></div>
+              <div class="field"><label>Responsável</label><select class="form-control" id="managementResponsible"><option value="">Todos</option></select></div>
+              <div class="field"><label>Estado</label><select class="form-control" id="managementState"><option value="">Todos</option></select></div>
+              <div class="field"><label>Polo</label><select class="form-control" id="managementPolo"><option value="">Todos</option></select></div>
+              <div class="field"><label>Situação</label><select class="form-control" id="managementStatus"><option value="">Todas</option>${situacoesContato.map((status)=>`<option>${escapeHTML(status)}</option>`).join('')}</select></div>
+              <div class="field"><button class="btn btn-primary" id="refreshManagementReport" type="button"><i class="fa-solid fa-filter"></i>Atualizar relatório</button></div>
+            </div>
+            <div class="management-report-grid" id="managementReportMetrics" style="margin-top:14px"></div>
+            <div class="table-wrap" style="margin-top:14px"><table class="workflow-table"><thead><tr><th>Responsável</th><th>Convênios</th><th>Contatos no período</th><th>Renovações</th><th>Pendências</th><th>Taxa</th></tr></thead><tbody id="managementReportBody"></tbody></table></div>
+          </section>`);
+      }
+
+      const modalHost = document.body;
+      if (!$('#bulkActionModalBackdrop')) {
+        modalHost.insertAdjacentHTML('beforeend', `
+          <div class="modal-backdrop" id="bulkActionModalBackdrop" aria-hidden="true">
+            <div class="modal" role="dialog" aria-modal="true" style="max-width:760px">
+              <div class="modal-header"><div><h2>Ações em massa</h2><p id="bulkActionSubtitle">Atualize os registros selecionados.</p></div><button class="modal-close" type="button" data-close="bulkActionModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
+              <form id="bulkActionForm">
+                <div class="modal-body">
+                  <div class="form-grid">
+                    <div class="field"><label>Responsável</label><input class="form-control" id="bulkResponsible" placeholder="Não alterar" /><span class="field-hint">Use “SEM RESPONSÁVEL” para remover a atribuição.</span></div>
+                    <div class="field"><label>Prioridade</label><select class="form-control" id="bulkPriority"><option value="">Não alterar</option>${advancedPriorityValues.map((value)=>`<option>${value}</option>`).join('')}</select></div>
+                    <div class="field"><label>Situação</label><select class="form-control" id="bulkStatus"><option value="">Não alterar</option>${situacoesContato.map((value)=>`<option>${escapeHTML(value)}</option>`).join('')}</select></div>
+                    <div class="field"><label>Próximo contato</label><input class="form-control" id="bulkNextDate" type="date" /></div>
+                    <div class="field span-2"><label>Próxima ação</label><input class="form-control" id="bulkNextAction" placeholder="Não alterar" /></div>
+                  </div>
+                  <div class="summary-box"><i class="fa-solid fa-circle-info"></i>Somente os campos preenchidos serão alterados. Próxima ação, data ou situação gerarão um registro no histórico de contatos.</div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="bulkActionModalBackdrop">Cancelar</button><button class="btn btn-primary" id="bulkApplyButton" type="submit"><i class="fa-solid fa-floppy-disk"></i>Aplicar alterações</button></div>
+              </form>
+            </div>
+          </div>`);
+      }
+
+      const companyModalBody = $('#companyModalBody') || $('.company-modal-body');
+      if (companyModalBody && !$('#editLockBanner')) {
+        companyModalBody.insertAdjacentHTML('afterbegin', '<div class="edit-lock-banner hidden" id="editLockBanner"></div>');
+      }
+
+      if (!$('#savedFilterNameBackdrop')) {
+        modalHost.insertAdjacentHTML('beforeend', `
+          <div class="modal-backdrop" id="savedFilterNameBackdrop" aria-hidden="true">
+            <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
+              <div class="modal-header"><div><h2>Salvar visualização</h2><p>Crie um atalho pessoal para os filtros atuais.</p></div><button class="modal-close" type="button" data-close="savedFilterNameBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
+              <form id="savedFilterNameForm">
+                <div class="modal-body"><div class="field"><label>Nome do atalho</label><input class="form-control" id="savedFilterName" maxlength="80" required placeholder="Ex.: Uniasselvi atrasados" /></div><input type="hidden" id="savedFilterPanel" /></div>
+                <div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="savedFilterNameBackdrop">Cancelar</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-bookmark"></i>Salvar</button></div>
+              </form>
+            </div>
+          </div>`);
+      }
+
+      if (!$('#managementReportPrintStyles')) {
+        const style = document.createElement('style');
+        style.id = 'managementReportPrintStyles';
+        style.textContent = '@media print{body.management-report-print .sidebar,body.management-report-print .topbar,body.management-report-print .panel:not(#panel-relatorios),body.management-report-print #panel-relatorios>*:not(#managementReportCard){display:none!important}body.management-report-print #managementReportCard{display:block!important;border:0!important;box-shadow:none!important}body.management-report-print .management-report-filters,body.management-report-print #managementReportCard .card-title button{display:none!important}}';
+        document.head.appendChild(style);
+      }
+
+      if (!$('#managementStartDate')?.value) {
+        const today = new Date();
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        $('#managementStartDate').value = start.toISOString().slice(0,10);
+        $('#managementEndDate').value = todayISO();
+      }
+    }
+
+    function ensureAuditComparisonNotice() {
+      const panel = $('#panel-auditoria');
+      if (!panel || $('#auditComparisonNotice')) return;
+      const anchor = $('#auditMetrics') || panel.firstElementChild;
+      anchor?.insertAdjacentHTML('beforebegin', '<div class="summary-box audit-comparison-notice" id="auditComparisonNotice"><i class="fa-solid fa-code-compare"></i><span><strong>Comparação visual ativa:</strong> abra os detalhes de uma edição para conferir, campo a campo, o valor anterior e o novo valor.</span></div>');
+    }
+
+    function currentCompanyPageRows() {
+      const start = (state.page - 1) * state.pageSize;
+      return state.filtered.slice(start, start + state.pageSize);
+    }
+
+    function updateBulkToolbar() {
+      const validIds = new Set(state.data.concedentes.map((company) => company.id));
+      [...state.bulkSelectedIds].forEach((id) => {
+        if (!validIds.has(id)) state.bulkSelectedIds.delete(id);
+      });
+      const count = state.bulkSelectedIds.size;
+      $('#bulkActionsToolbar')?.classList.toggle('hidden', count === 0);
+      if ($('#bulkSelectedCount')) $('#bulkSelectedCount').textContent = String(count);
+      const rows = currentCompanyPageRows();
+      const selected = rows.filter((company) => state.bulkSelectedIds.has(company.id)).length;
+      const selectAll = $('#bulkSelectAllPage');
+      if (selectAll) {
+        selectAll.checked = rows.length > 0 && selected === rows.length;
+        selectAll.indeterminate = selected > 0 && selected < rows.length;
+      }
+    }
+
+    function enhanceCompanyTableSelection() {
+      const table = $('#companiesTableBody')?.closest('table');
+      const header = table?.querySelector('thead tr');
+      if (header && !$('#bulkSelectAllPage')) {
+        header.insertAdjacentHTML('afterbegin', '<th class="bulk-check-cell"><input type="checkbox" id="bulkSelectAllPage" aria-label="Selecionar página atual" /></th>');
+      }
+      const pageRows = currentCompanyPageRows();
+      $$('#companiesTableBody tr').forEach((row, index) => {
+        const company = pageRows[index];
+        if (!company || row.children.length <= 1) {
+          row.firstElementChild?.setAttribute('colspan','40');
+          return;
+        }
+        if (row.querySelector('[data-bulk-company]')) return;
+        row.insertAdjacentHTML('afterbegin', `<td class="bulk-check-cell"><input type="checkbox" data-bulk-company="${company.id}" ${state.bulkSelectedIds.has(company.id) ? 'checked' : ''} aria-label="Selecionar ${escapeHTML(company.nomeFantasia || company.razaoSocial)}" /></td>`);
+      });
+      updateBulkToolbar();
+    }
+
+    async function applyBulkActions(event) {
+      event.preventDefault();
+      if (!canEdit()) return;
+      const ids = [...state.bulkSelectedIds];
+      if (!ids.length) return;
+      const responsibleRaw = String($('#bulkResponsible')?.value || '').trim();
+      const payload = {
+        responsavelAcompanhamento: normalize(responsibleRaw) === 'sem responsavel' ? '__CLEAR__' : responsibleRaw,
+        prioridade: $('#bulkPriority')?.value || '',
+        situacao: $('#bulkStatus')?.value || '',
+        proximaAcao: String($('#bulkNextAction')?.value || '').trim(),
+        proximaData: $('#bulkNextDate')?.value || ''
+      };
+      if (!Object.values(payload).some(Boolean)) {
+        toast('warning','Nenhuma alteração','Preencha ao menos um campo.');
+        return;
+      }
+      const button = $('#bulkApplyButton');
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Aplicando…';
+      }
+      try {
+        const result = await window.remoteData.bulkUpdateCompanies(ids, payload);
+        closeModal('bulkActionModalBackdrop');
+        state.bulkSelectedIds.clear();
+        await loadRemoteData({ silent: true });
+        toast('success','Ações concluídas',`${Number(result?.updated || ids.length)} concedente(s) atualizada(s) e ${Number(result?.contactsInserted || 0)} registro(s) de acompanhamento criado(s).`);
+      } catch (error) {
+        toast('error','Falha nas ações em massa',error.message || 'Não foi possível atualizar os registros.');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>Aplicar alterações';
+        }
+      }
+    }
+
+    async function exportBulkSelected() {
+      if (!ensureAdmin('exportar cadastros selecionados')) return;
+      const rows = state.data.concedentes.filter((company) => state.bulkSelectedIds.has(company.id));
+      if (!rows.length) return;
+      const filename = `concedentes_selecionadas_${new Date().toLocaleDateString('pt-BR').replaceAll('/','-')}.xlsx`;
+      const blob = workbookBlob([{ name:'Concedentes', rows:[CSV_HEADERS,...rows.map(companyToCsvRow)], widths:[23,19,34,28,16,22,28,24,16,38,12,28,10,20,20,10,22,30,18,20,28,14,34,18,18,16,18,24,24,28,24,24,40] }]);
+      await completeSpreadsheetDownload(blob, filename, 'concedentes-selecionadas', rows.length);
+      toast('success','Selecionados exportados',`${rows.length} cadastro(s) incluído(s) no arquivo.`);
+    }
+
+    function savedFilterPanelItems(panel) {
+      return state.savedFilters.filter((item) => item.painel === panel);
+    }
+
+    function renderSavedFilterOptions() {
+      const definitions = [
+        ['concedentes','#savedCompanyFilters','Selecione um filtro salvo'],
+        ['fila','#savedQueueFilters','Selecione uma fila salva']
+      ];
+      definitions.forEach(([panel, selector, placeholder]) => {
+        const select = $(selector);
+        if (!select) return;
+        const current = select.value;
+        const rows = savedFilterPanelItems(panel);
+        select.innerHTML = `<option value="">${placeholder}</option>` + rows.map((item)=>`<option value="${escapeHTML(item.id)}">${escapeHTML(item.nome)}</option>`).join('');
+        if (rows.some((item)=>String(item.id)===String(current))) select.value = current;
+      });
+    }
+
+    async function loadSavedFilters({ silent = true } = {}) {
+      if (!window.remoteData?.listSavedFilters || !window.currentUser?.id || state.savedFiltersLoading) return;
+      state.savedFiltersLoading = true;
+      try {
+        state.savedFilters = await window.remoteData.listSavedFilters();
+        renderSavedFilterOptions();
+      } catch (error) {
+        if (!silent) toast('error','Falha ao carregar atalhos',error.message || 'Não foi possível carregar os filtros salvos.');
+      } finally {
+        state.savedFiltersLoading = false;
+      }
+    }
+
+    function captureCompanyFilters() {
+      const ids = ['filterVigencia','filterMarca','filterEstado','filterCidade','filterPolo','filterSituacao','filterForma','filterInicio','filterFim','filterRapido','filterResponsavel','filterPrioridade'];
+      return {
+        values: Object.fromEntries(ids.map((id)=>[id,$('#'+id)?.value || ''])),
+        search: $('#tableSearch')?.value || '',
+        sort: { ...state.sort },
+        pageSize: state.pageSize
+      };
+    }
+
+    function captureQueueFilters() {
+      return {
+        queueScope: $('#queueScope')?.value || 'mine',
+        queueBrand: $('#queueBrand')?.value || '',
+        queueDue: $('#queueDue')?.value || '',
+        queuePriority: $('#queuePriority')?.value || '',
+        queueSearch: $('#queueSearch')?.value || ''
+      };
+    }
+
+    function applySavedFilter(item) {
+      if (!item) return;
+      const filters = item.filtros || {};
+      if (item.painel === 'concedentes') {
+        updateFilterOptions();
+        Object.entries(filters.values || {}).forEach(([id,value]) => {
+          const element = $('#'+id);
+          if (element) element.value = value || '';
+        });
+        if ($('#tableSearch')) $('#tableSearch').value = filters.search || '';
+        if (filters.sort?.key) state.sort = { key: filters.sort.key, dir: filters.sort.dir === 'asc' ? 'asc' : 'desc' };
+        if (Number(filters.pageSize)) {
+          state.pageSize = Number(filters.pageSize);
+          if ($('#pageSize')) $('#pageSize').value = String(state.pageSize);
+        }
+        state.page = 1;
+        renderCompanies();
+      }
+      if (item.painel === 'fila') {
+        ['queueScope','queueBrand','queueDue','queuePriority','queueSearch'].forEach((id) => {
+          const element = $('#'+id);
+          if (element && filters[id] !== undefined) element.value = filters[id];
+        });
+        renderWorkQueue();
+      }
+      toast('success','Visualização aplicada',`O atalho “${item.nome}” foi carregado.`);
+    }
+
+    function openSaveFilterDialog(panel) {
+      $('#savedFilterPanel').value = panel;
+      $('#savedFilterName').value = '';
+      openModal('savedFilterNameBackdrop');
+      setTimeout(()=>$('#savedFilterName')?.focus(),60);
+    }
+
+    async function saveCurrentFilter(event) {
+      event.preventDefault();
+      const panel = $('#savedFilterPanel')?.value;
+      const name = String($('#savedFilterName')?.value || '').trim();
+      if (!name || !['concedentes','fila'].includes(panel)) return;
+      const filters = panel === 'concedentes' ? captureCompanyFilters() : captureQueueFilters();
+      try {
+        await window.remoteData.saveSavedFilter({ nome:name, painel:panel, filtros:filters });
+        closeModal('savedFilterNameBackdrop');
+        await loadSavedFilters({ silent: false });
+        toast('success','Atalho salvo',`“${name}” estará disponível nos seus próximos acessos.`);
+      } catch (error) {
+        toast('error','Falha ao salvar atalho',error.message || 'Não foi possível salvar o filtro.');
+      }
+    }
+
+    async function deleteSelectedSavedFilter(panel) {
+      const selector = panel === 'concedentes' ? '#savedCompanyFilters' : '#savedQueueFilters';
+      const id = $(selector)?.value;
+      if (!id) {
+        toast('warning','Selecione um atalho','Escolha a visualização que deseja excluir.');
+        return;
+      }
+      try {
+        await window.remoteData.deleteSavedFilter(id);
+        await loadSavedFilters({ silent: true });
+        toast('success','Atalho excluído','A visualização salva foi removida.');
+      } catch (error) {
+        toast('error','Falha ao excluir atalho',error.message || 'Não foi possível excluir o filtro.');
+      }
+    }
+
+    function setCompanyFormReadOnly(readOnly) {
+      const form = $('#companyForm');
+      if (!form) return;
+      $$('input,select,textarea,button[type="submit"]', form).forEach((element) => {
+        element.disabled = Boolean(readOnly);
+      });
+    }
+
+    function showEditLockBanner(kind, title, detail) {
+      const banner = $('#editLockBanner');
+      if (!banner) return;
+      banner.classList.remove('hidden','warning');
+      if (kind === 'warning') banner.classList.add('warning');
+      banner.innerHTML = `<i class="fa-solid ${kind === 'warning' ? 'fa-lock' : 'fa-user-shield'}"></i><div><strong>${escapeHTML(title)}</strong><span>${escapeHTML(detail)}</span></div>`;
+    }
+
+    function hideEditLockBanner() {
+      $('#editLockBanner')?.classList.add('hidden');
+    }
+
+    function stopEditLockTimer() {
+      if (state.editLockTimer) clearInterval(state.editLockTimer);
+      state.editLockTimer = null;
+    }
+
+    async function releaseCurrentEditLock() {
+      stopEditLockTimer();
+      const companyId = state.activeEditLock?.companyId;
+      const owned = state.activeEditLock?.owned;
+      state.activeEditLock = null;
+      hideEditLockBanner();
+      if (companyId && owned && window.remoteData?.releaseEditLock) {
+        try { await window.remoteData.releaseEditLock(companyId); } catch {}
+      }
+    }
+
+    async function beginCompanyEditLock(companyId) {
+      stopEditLockTimer();
+      state.activeEditLock = { companyId, owned:false, checking:true };
+      setCompanyFormReadOnly(true);
+      showEditLockBanner('info','Verificando edição simultânea','Aguarde enquanto o sistema reserva este cadastro para edição.');
+      if (!window.remoteData?.acquireEditLock) {
+        state.activeEditLock = { companyId, owned:true, compatibility:true };
+        setCompanyFormReadOnly(false);
+        showEditLockBanner('info','Proteção em modo compatível','A tabela de bloqueios ainda não está disponível. A edição continuará normalmente.');
+        return;
+      }
+      try {
+        const result = await window.remoteData.acquireEditLock(companyId, editLockTtlSeconds);
+        if (result?.acquired) {
+          state.activeEditLock = { companyId, owned:true, expiresAt:result.expiresAt || '' };
+          setCompanyFormReadOnly(false);
+          showEditLockBanner('info','Edição reservada para você','Outros usuários serão avisados enquanto este formulário estiver aberto.');
+          state.editLockTimer = setInterval(async()=>{
+            try {
+              const refreshed = await window.remoteData.acquireEditLock(companyId, editLockTtlSeconds);
+              if (!refreshed?.acquired) {
+                stopEditLockTimer();
+                state.activeEditLock = { companyId, owned:false, lock:refreshed };
+                setCompanyFormReadOnly(true);
+                showEditLockBanner('warning','A reserva de edição foi perdida',`O cadastro está reservado por ${refreshed?.usuarioNome || refreshed?.usuarioEmail || 'outro usuário'}.`);
+                toast('warning','Edição bloqueada','Outro usuário assumiu este cadastro.');
+              }
+            } catch {}
+          }, editLockRefreshMs);
+        } else {
+          state.activeEditLock = { companyId, owned:false, lock:result };
+          setCompanyFormReadOnly(true);
+          const expiry = result?.expiresAt ? new Date(result.expiresAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+          showEditLockBanner('warning','Cadastro em edição',`${result?.usuarioNome || result?.usuarioEmail || 'Outro usuário'} está editando este cadastro${expiry ? ` até aproximadamente ${expiry}` : ''}. O formulário foi aberto somente para consulta.`);
+        }
+      } catch (error) {
+        state.activeEditLock = { companyId, owned:true, compatibility:true };
+        setCompanyFormReadOnly(false);
+        showEditLockBanner('info','Proteção temporariamente indisponível','A edição foi liberada, mas não foi possível consultar o bloqueio simultâneo.');
+      }
+    }
+
+    function managementFilteredCompanies() {
+      const brand = $('#managementBrand')?.value || '';
+      const responsible = $('#managementResponsible')?.value || '';
+      const stateCode = $('#managementState')?.value || '';
+      const polo = $('#managementPolo')?.value || '';
+      const status = $('#managementStatus')?.value || '';
+      return state.data.concedentes.map(normalizeCompany).filter((company) => {
+        if (brand && company.marca !== brand) return false;
+        if (responsible && company.responsavelOperacional !== responsible) return false;
+        if (stateCode && company.estado !== stateCode) return false;
+        if (polo && company.polo !== polo) return false;
+        if (status && company.situacao !== status) return false;
+        return true;
+      });
+    }
+
+    function dateInsidePeriod(value, start, end) {
+      if (!value) return false;
+      const date = String(value).slice(0,10);
+      return (!start || date >= start) && (!end || date <= end);
+    }
+
+    function renderManagementReport() {
+      if (!$('#managementReportCard')) return;
+      const companies = state.data.concedentes.map(normalizeCompany);
+      setSelectOptions('#managementResponsible', companies.map((company)=>company.responsavelOperacional), $('#managementResponsible')?.value || '');
+      setSelectOptions('#managementState', companies.map((company)=>company.estado), $('#managementState')?.value || '');
+      setSelectOptions('#managementPolo', companies.map((company)=>company.polo), $('#managementPolo')?.value || '');
+      const start = $('#managementStartDate')?.value || '';
+      const end = $('#managementEndDate')?.value || '';
+      const rows = managementFilteredCompanies();
+      const contacts = rows.flatMap((company) => (company.contatos || []).filter((contact)=>dateInsidePeriod(contact.data,start,end)).map((contact)=>({company,contact})));
+      const renewals = contacts.filter(({contact})=>contact.resultado === 'Renovado');
+      const open = rows.filter((company)=>!closedWorkflowStatuses.has(company.situacao));
+      const noResponse = rows.filter((company)=>{
+        if (company.situacao !== 'Aguardando retorno') return false;
+        const last = latestContact(company);
+        if (!last?.data) return true;
+        return daysBetween(parseDate(last.data), parseDate(todayISO())) > 10;
+      });
+      const completionDays = renewals.map(({company,contact})=>{
+        if (!company.dataCadastro || !contact.data) return null;
+        return Math.max(0,daysBetween(parseDate(company.dataCadastro),parseDate(contact.data)));
+      }).filter((value)=>value!==null);
+      const averageDays = completionDays.length ? Math.round(completionDays.reduce((sum,value)=>sum+value,0)/completionDays.length) : 0;
+      const rate = rows.length ? Math.round((rows.filter((company)=>company.situacao==='Renovado').length/rows.length)*100) : 0;
+      const metrics = [
+        ['Convênios no filtro',rows.length,'fa-building'],
+        ['Contatos no período',contacts.length,'fa-comments'],
+        ['Renovações registradas',renewals.length,'fa-circle-check'],
+        ['Pendências atuais',open.length,'fa-hourglass-half'],
+        ['Sem retorno há 10+ dias',noResponse.length,'fa-envelope-open-text'],
+        ['Taxa atual de renovação',`${rate}%`,'fa-chart-line'],
+        ['Tempo médio até renovação',`${averageDays} dia(s)`,'fa-stopwatch']
+      ];
+      $('#managementReportMetrics').innerHTML = metrics.map(([label,value,icon])=>`<div class="workflow-card"><span>${label}</span><strong>${value}</strong><i class="fa-solid ${icon}" style="float:right;color:var(--muted)"></i></div>`).join('');
+      const byResponsible = new Map();
+      rows.forEach((company)=>{
+        const key = company.responsavelOperacional || 'Sem responsável';
+        const item = byResponsible.get(key) || { name:key, companies:[], contacts:0, renewals:0, pending:0 };
+        item.companies.push(company);
+        item.contacts += (company.contatos || []).filter((contact)=>dateInsidePeriod(contact.data,start,end)).length;
+        item.renewals += (company.contatos || []).filter((contact)=>dateInsidePeriod(contact.data,start,end)&&contact.resultado==='Renovado').length;
+        if (!closedWorkflowStatuses.has(company.situacao)) item.pending += 1;
+        byResponsible.set(key,item);
+      });
+      state.managementReportRows = [...byResponsible.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+      $('#managementReportBody').innerHTML = state.managementReportRows.length ? state.managementReportRows.map((item)=>{
+        const itemRate = item.companies.length ? Math.round((item.companies.filter((company)=>company.situacao==='Renovado').length/item.companies.length)*100) : 0;
+        return `<tr><td><strong>${escapeHTML(item.name)}</strong></td><td>${item.companies.length}</td><td>${item.contacts}</td><td>${item.renewals}</td><td>${item.pending}</td><td>${itemRate}%</td></tr>`;
+      }).join('') : `<tr><td colspan="6">${emptyState('Nenhum dado no período','Altere os filtros do relatório gerencial.')}</td></tr>`;
+    }
+
+    async function exportManagementReport() {
+      if (!ensureAdmin('exportar o relatório gerencial')) return;
+      renderManagementReport();
+      const rows = state.managementReportRows || [];
+      if (!rows.length) return toast('warning','Nada para exportar','Nenhum dado corresponde aos filtros.');
+      const headers = ['Responsável','Convênios','Contatos no período','Renovações','Pendências','Taxa atual'];
+      const data = rows.map((item)=>{
+        const rate = item.companies.length ? Math.round((item.companies.filter((company)=>company.situacao==='Renovado').length/item.companies.length)*100) : 0;
+        return [item.name,item.companies.length,item.contacts,item.renewals,item.pending,`${rate}%`];
+      });
+      const details = managementFilteredCompanies().map((company)=>[
+        company.nomeFantasia || company.razaoSocial,company.cnpj,company.marca,company.responsavelOperacional,
+        company.prioridade,company.situacao,company.estado,company.cidade,company.polo,
+        company.proximaAcao,formatDate(company.proximaData)
+      ]);
+      const blob = workbookBlob([
+        { name:'Resumo por responsável', rows:[headers,...data], widths:[28,15,20,15,15,15] },
+        { name:'Convênios do filtro', rows:[['Concedente','CNPJ','Marca','Responsável','Prioridade','Situação','Estado','Cidade','Polo','Próxima ação','Próximo contato'],...details], widths:[34,20,16,28,14,25,10,22,24,36,18] }
+      ]);
+      const filename = `relatorio_gerencial_${new Date().toLocaleDateString('pt-BR').replaceAll('/','-')}.xlsx`;
+      await completeSpreadsheetDownload(blob,filename,'relatorio-gerencial',details.length);
+      toast('success','Relatório gerencial exportado',`${details.length} convênio(s) incluído(s).`);
+    }
+
+    function healthStatusCard(id, title, icon) {
+      return `<article class="health-card" id="health-${id}"><div class="health-card-head"><strong>${escapeHTML(title)}</strong><i class="fa-solid ${icon}"></i></div><span class="badge badge-muted" data-health-status>Não testado</span><small data-health-detail>Clique em Testar serviços.</small></article>`;
+    }
+
+    function setHealthResult(id, status, detail) {
+      const card = $('#health-'+id);
+      if (!card) return;
+      const badge = $('[data-health-status]',card);
+      const text = $('[data-health-detail]',card);
+      const meta = {
+        ok:['Operacional','badge-success'],
+        warning:['Atenção','badge-warning'],
+        error:['Indisponível','badge-danger'],
+        loading:['Testando…','badge-muted']
+      }[status] || ['Não testado','badge-muted'];
+      badge.className = `badge ${meta[1]}`;
+      badge.textContent = meta[0];
+      text.textContent = detail || '';
+    }
+
+    function renderSystemHealth() {
+      if (!isAdmin()) return;
+      const grid = $('#healthGrid');
+      if (!grid) return;
+      if (!grid.children.length) {
+        grid.innerHTML = [
+          healthStatusCard('supabase','Supabase','fa-database'),
+          healthStatusCard('cnpj','Consulta de CNPJ','fa-building-circle-check'),
+          healthStatusCard('cep','ViaCEP','fa-location-dot'),
+          healthStatusCard('backup','Backup e armazenamento','fa-cloud-arrow-up'),
+          healthStatusCard('session','Autenticação','fa-user-shield'),
+          healthStatusCard('version','Versão publicada','fa-code-branch')
+        ].join('');
+      }
+      const version = document.querySelector('meta[name="app-version"]')?.content || '—';
+      const build = window.__CONVENIOS_BUILD__ || '—';
+      $('#healthTechnicalInfo').innerHTML = `<div class="detail-grid"><div><span>Versão</span><strong>${escapeHTML(version)}</strong></div><div><span>Build</span><strong>${escapeHTML(build)}</strong></div><div><span>Usuário</span><strong>${escapeHTML(window.currentUser?.email || '—')}</strong></div><div><span>Último teste</span><strong>${state.healthLastRun ? state.healthLastRun.toLocaleString('pt-BR') : 'Ainda não executado'}</strong></div></div>`;
+      setHealthResult('version','ok',`V${version} — ${build}`);
+      setHealthResult('session',window.currentUser?.id?'ok':'error',window.currentUser?.id ? `Sessão ativa para ${window.currentUser.email || window.currentUser.nome}` : 'Nenhum usuário autenticado.');
+    }
+
+    async function runSystemHealthChecks() {
+      renderSystemHealth();
+      ['supabase','cnpj','cep','backup'].forEach((id)=>setHealthResult(id,'loading','Aguardando resposta do serviço.'));
+      const supabaseTest = (async()=>{
+        const result = await window.remoteData.healthCheck();
+        setHealthResult('supabase','ok',`${Number(result?.companies || 0)} concedente(s) acessível(is).`);
+      })();
+      const cepTest = (async()=>{
+        const response = await fetch('https://viacep.com.br/ws/01001000/json/',{cache:'no-store'});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (!data?.localidade) throw new Error('Resposta incompleta.');
+        setHealthResult('cep','ok',`Serviço respondeu: ${data.localidade}/${data.uf}.`);
+      })();
+      const cnpjTest = (async()=>{
+        const sample = state.data.concedentes.find((company)=>cnpjValidLength(company.cnpj));
+        const cnpj = cnpjKey(sample?.cnpj || '00000000000000');
+        const token = await getAuthenticatedToken();
+        const response = await fetch(`/api/cnpj-lookup?cnpj=${encodeURIComponent(cnpj)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
+        if (response.status >= 500) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json().catch(()=>null);
+        setHealthResult('cnpj',response.ok?'ok':'warning',response.ok ? `Rota operacional${body?.data?.razao_social ? ` — ${body.data.razao_social}` : ''}.` : `A rota respondeu HTTP ${response.status}; verifique o CNPJ de teste.`);
+      })();
+      const backupTest = (async()=>{
+        if (!isAdmin()) {
+          setHealthResult('backup','warning','A verificação detalhada é exclusiva do administrador.');
+          return;
+        }
+        const response = await exportApi('');
+        const payload = await response.json().catch(()=>null);
+        if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+        const automatic = (payload?.data?.items || []).filter((item)=>item.origem==='automatica');
+        const latest = automatic[0];
+        setHealthResult('backup',latest?'ok':'warning',latest ? `Última cópia: ${new Date(latest.criado_em).toLocaleString('pt-BR')}.` : 'Nenhum backup automático encontrado.');
+      })();
+      const results = await Promise.allSettled([supabaseTest,cepTest,cnpjTest,backupTest]);
+      const ids = ['supabase','cep','cnpj','backup'];
+      results.forEach((result,index)=>{
+        if (result.status === 'rejected') setHealthResult(ids[index],'error',result.reason?.message || 'Falha na verificação.');
+      });
+      state.healthLastRun = new Date();
+      renderSystemHealth();
+    }
+
+    function bindAdvancedManagementEvents() {
+      $('#bulkActionForm')?.addEventListener('submit',applyBulkActions);
+      $('#bulkOpenActions')?.addEventListener('click',()=>{
+        const count = state.bulkSelectedIds.size;
+        if (!count) return;
+        $('#bulkActionForm').reset();
+        $('#bulkActionSubtitle').textContent = `${count} concedente(s) serão atualizada(s).`;
+        openModal('bulkActionModalBackdrop');
+      });
+      $('#bulkExportSelected')?.addEventListener('click',exportBulkSelected);
+      $('#bulkClearSelection')?.addEventListener('click',()=>{state.bulkSelectedIds.clear();renderCompanies();});
+      $('#saveCompanyFilter')?.addEventListener('click',()=>openSaveFilterDialog('concedentes'));
+      $('#saveQueueFilter')?.addEventListener('click',()=>openSaveFilterDialog('fila'));
+      $('#deleteCompanyFilter')?.addEventListener('click',()=>deleteSelectedSavedFilter('concedentes'));
+      $('#deleteQueueFilter')?.addEventListener('click',()=>deleteSelectedSavedFilter('fila'));
+      $('#savedFilterNameForm')?.addEventListener('submit',saveCurrentFilter);
+      $('#savedCompanyFilters')?.addEventListener('change',(event)=>applySavedFilter(state.savedFilters.find((item)=>String(item.id)===String(event.target.value))));
+      $('#savedQueueFilters')?.addEventListener('change',(event)=>applySavedFilter(state.savedFilters.find((item)=>String(item.id)===String(event.target.value))));
+      ['managementStartDate','managementEndDate','managementBrand','managementResponsible','managementState','managementPolo','managementStatus'].forEach((id)=>$('#'+id)?.addEventListener('change',renderManagementReport));
+      $('#refreshManagementReport')?.addEventListener('click',renderManagementReport);
+      $('#exportManagementReport')?.addEventListener('click',exportManagementReport);
+      $('#printManagementReport')?.addEventListener('click',()=>{
+        document.body.classList.add('management-report-print');
+        window.print();
+        setTimeout(()=>document.body.classList.remove('management-report-print'),500);
+      });
+      $('#runHealthChecks')?.addEventListener('click',runSystemHealthChecks);
+      document.addEventListener('change',(event)=>{
+        const checkbox = event.target.closest?.('[data-bulk-company]');
+        if (checkbox) {
+          if (checkbox.checked) state.bulkSelectedIds.add(checkbox.dataset.bulkCompany);
+          else state.bulkSelectedIds.delete(checkbox.dataset.bulkCompany);
+          updateBulkToolbar();
+        }
+        if (event.target.id === 'bulkSelectAllPage') {
+          currentCompanyPageRows().forEach((company)=>{
+            if (event.target.checked) state.bulkSelectedIds.add(company.id);
+            else state.bulkSelectedIds.delete(company.id);
+          });
+          renderCompanies();
+        }
+      });
+      document.addEventListener('auth:ready',()=>{
+        loadSavedFilters({silent:true});
+        if ($('#panel-saude')?.classList.contains('active')) runSystemHealthChecks();
+      });
+      document.addEventListener('auth:signed-out',()=>{
+        state.savedFilters = [];
+        state.bulkSelectedIds.clear();
+        releaseCurrentEditLock();
+        renderSavedFilterOptions();
+      });
+      window.addEventListener('beforeunload',()=>{ if (state.activeEditLock?.owned) window.remoteData?.releaseEditLock?.(state.activeEditLock.companyId); });
+    }
+
+    const baseRenderCompaniesV870 = renderCompanies;
+    renderCompanies = function() {
+      baseRenderCompaniesV870();
+      enhanceCompanyTableSelection();
+    };
+
+    const baseOpenCompanyFormV870 = openCompanyForm;
+    openCompanyForm = function(id = null, preset = null) {
+      const releasePromise = releaseCurrentEditLock();
+      baseOpenCompanyFormV870(id,preset);
+      if (id) {
+        setCompanyFormReadOnly(true);
+        Promise.resolve(releasePromise).finally(() => beginCompanyEditLock(id));
+      } else {
+        state.activeEditLock = null;
+        setCompanyFormReadOnly(false);
+        hideEditLockBanner();
+      }
+    };
+
+    const baseCloseModalV870 = closeModal;
+    closeModal = function(id) {
+      if (id === 'companyModalBackdrop') releaseCurrentEditLock();
+      return baseCloseModalV870(id);
+    };
+
+    const baseSaveCompanyV870 = saveCompany;
+    saveCompany = async function(data) {
+      const editingExisting = state.data.concedentes.some((company)=>company.id===data.id);
+      if (editingExisting && state.activeEditLock && !state.activeEditLock.owned) {
+        toast('error','Cadastro bloqueado','Outro usuário está editando este cadastro. Aguarde a liberação.');
+        return;
+      }
+      return baseSaveCompanyV870(data);
+    };
+
+    const baseRenderReportsV870 = renderReports;
+    renderReports = function() {
+      baseRenderReportsV870();
+      renderManagementReport();
+    };
+
+    const baseRenderAllV870 = renderAll;
+    renderAll = function() {
+      baseRenderAllV870();
+      const active = $('.panel.active')?.id.replace('panel-','') || '';
+      if (active === 'relatorios') renderManagementReport();
+      if (active === 'saude') renderSystemHealth();
+      renderSavedFilterOptions();
+      updateBulkToolbar();
+    };
+
+
+    // =====================================================================
+    // V8.8.1 — ESTABILIDADE, RECUPERAÇÃO E CLASSIFICAÇÃO JURÍDICA
+    // =====================================================================
+
+    state.flowRules = state.flowRules || [];
+    state.flowRulesLoading = false;
+    state.operators = state.operators || [];
+    state.commentCache = state.commentCache || new Map();
+    state.myMentions = state.myMentions || [];
+    state.goals = state.goals || [];
+    state.maintenance = state.maintenance || { ativo:false, mensagem:'', inicioEm:'', fimEm:'' };
+    state.undoOperations = state.undoOperations || [];
+    state.pendingBulkPreview = null;
+    state.pendingDistribution = null;
+    state.calendarCursor = state.calendarCursor || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    state.activeLocks = state.activeLocks || [];
+    state.globalSearchTimer = null;
+    state.supplementalLoadedAt = 0;
+
+    const priorityRankV880 = Object.freeze({ Baixa:1, 'Média':2, Alta:3, Urgente:4 });
+
+    function normalizeTags(value) {
+      const source = Array.isArray(value) ? value : String(value || '').split(/[,;|]/);
+      return [...new Set(source.map((item)=>String(item || '').trim()).filter(Boolean))]
+        .slice(0, 20);
+    }
+
+    function addBusinessDaysISO(days = 0, from = new Date()) {
+      const date = new Date(from);
+      date.setHours(12,0,0,0);
+      let remaining = Math.max(0, Number(days || 0));
+      while (remaining > 0) {
+        date.setDate(date.getDate() + 1);
+        if (![0,6].includes(date.getDay())) remaining -= 1;
+      }
+      return date.toISOString().slice(0,10);
+    }
+
+    function latestInteractionDate(company) {
+      const values = [];
+      (company?.contatos || []).forEach((contact)=>{
+        if (contact.data) values.push(new Date(`${contact.data}T${contact.horario || '12:00'}:00`));
+      });
+      (company?.comunicacoes || []).forEach((communication)=>{
+        const raw = communication.confirmadoEm || communication.preparadoEm || communication.criadoEm;
+        if (raw) values.push(new Date(raw));
+      });
+      const valid = values.filter((date)=>!Number.isNaN(date.getTime())).sort((a,b)=>b-a);
+      return valid[0] || null;
+    }
+
+    function inactivityInfo(company) {
+      const last = latestInteractionDate(company);
+      if (!last) return { days:null, label:'Nunca contatada', tone:'danger' };
+      const now = new Date();
+      now.setHours(12,0,0,0);
+      const day = new Date(last); day.setHours(12,0,0,0);
+      const days = Math.max(0, Math.floor((now - day) / 86400000));
+      return {
+        days,
+        label: days === 0 ? 'Contato hoje' : `Há ${days} dia${days === 1 ? '' : 's'}`,
+        tone: days <= 5 ? 'success' : days <= 10 ? 'warning' : 'danger'
+      };
+    }
+
+    function inactivityBadge(company) {
+      const info = inactivityInfo(company);
+      const cls = info.tone === 'success' ? 'badge-success' : info.tone === 'warning' ? 'badge-warning' : 'badge-danger';
+      return `<span class="badge ${cls}" title="Última interação registrada">${escapeHTML(info.label)}</span>`;
+    }
+
+    function maintenanceBlocksWrites() {
+      if (!state.maintenance?.ativo || isAdmin()) return false;
+      if (state.maintenance.fimEm && new Date(state.maintenance.fimEm) <= new Date()) return false;
+      return true;
+    }
+
+    function ensureOperationalWrite(action = 'realizar esta alteração') {
+      if (!maintenanceBlocksWrites()) return true;
+      toast('warning','Sistema em manutenção',state.maintenance.mensagem || `Não é possível ${action} durante a manutenção.`);
+      return false;
+    }
+
+    function tagBadges(tags = []) {
+      const normalized = normalizeTags(tags);
+      if (!normalized.length) return '<span class="muted">—</span>';
+      return `<div class="tag-cloud">${normalized.map((tag)=>`<span class="workflow-tag">${escapeHTML(tag)}</span>`).join('')}</div>`;
+    }
+
+    const baseNormalizeCompanyV880 = normalizeCompany;
+    normalizeCompany = function(company) {
+      const normalized = baseNormalizeCompanyV880(company);
+      return runOptionalFeature('normalização de etiquetas e inatividade', () => {
+        normalized.etiquetas = normalizeTags(company?.etiquetas || normalized.etiquetas || []);
+        normalized.inatividade = inactivityInfo(normalized);
+        return normalized;
+      }, normalized);
+    };
+
+    function ensureAutomationSuiteUI() {
+      if ($('#automationSuiteV880')) return;
+      const marker = document.createElement('div');
+      marker.id = 'automationSuiteV880';
+      marker.hidden = true;
+      document.body.appendChild(marker);
+
+      const themeButton = $('#themeToggle');
+      if (themeButton && !$('#globalSearchButton')) {
+        themeButton.insertAdjacentHTML('beforebegin', '<button class="icon-btn" id="globalSearchButton" type="button" title="Pesquisa global (Ctrl+K)"><i class="fa-solid fa-magnifying-glass"></i></button>');
+      }
+
+      const queueNav = $('.nav-item[data-panel="fila"]');
+      if (queueNav && !$('.nav-item[data-panel="calendario"]')) {
+        queueNav.insertAdjacentHTML('afterend','<button class="nav-item" data-panel="calendario"><i class="fa-solid fa-calendar-days"></i><span class="nav-label">Calendário</span></button>');
+      }
+      const qualityNav = $('.nav-item[data-panel="qualidade"]');
+      if (qualityNav && !$('.nav-item[data-panel="excecoes"]')) {
+        qualityNav.insertAdjacentHTML('afterend','<button class="nav-item" data-panel="excecoes"><i class="fa-solid fa-triangle-exclamation"></i><span class="nav-label">Exceções</span></button>');
+      }
+      const reportsNav = $('.nav-item[data-panel="relatorios"]');
+      if (reportsNav && !$('.nav-item[data-panel="metas"]')) {
+        reportsNav.insertAdjacentHTML('afterend','<button class="nav-item" data-panel="metas"><i class="fa-solid fa-bullseye"></i><span class="nav-label">Metas</span></button>');
+      }
+
+      const panelsHost = $('#panel-dashboard')?.parentElement;
+      if (panelsHost && !$('#panel-calendario')) {
+        panelsHost.insertAdjacentHTML('beforeend', `
+          <section class="panel" id="panel-calendario">
+            <div class="panel-header"><div><h2>Calendário de acompanhamentos</h2><p>Próximos contatos, vencimentos e prazos operacionais.</p></div><div class="panel-actions"><button class="btn btn-secondary" id="calendarToday" type="button">Hoje</button><button class="btn btn-secondary btn-icon" id="calendarPrevious" type="button"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-secondary btn-icon" id="calendarNext" type="button"><i class="fa-solid fa-chevron-right"></i></button></div></div>
+            <div class="card"><div class="workflow-toolbar"><div class="field"><label>Marca</label><select class="form-control" id="calendarBrand"><option value="">Ambas</option><option>Uniasselvi</option><option>Unicesumar</option></select></div><div class="field"><label>Responsável</label><select class="form-control" id="calendarResponsible"><option value="">Todos</option></select></div><div class="field"><label>Pesquisar</label><input class="form-control" id="calendarSearch" placeholder="Concedente, cidade ou ação..." /></div></div><div class="calendar-title" id="calendarTitle"></div><div class="calendar-grid" id="calendarGrid"></div></div>
+          </section>
+          <section class="panel" id="panel-excecoes">
+            <div class="panel-header"><div><h2>Central de exceções</h2><p>Ocorrências cadastrais, operacionais e técnicas que precisam de atenção.</p></div><div class="panel-actions"><button class="btn btn-secondary" id="refreshExceptions" type="button"><i class="fa-solid fa-rotate"></i>Atualizar</button></div></div>
+            <div class="workflow-grid" id="exceptionMetrics"></div>
+            <div class="card"><div class="workflow-toolbar"><div class="field"><label>Tipo</label><select class="form-control" id="exceptionType"><option value="">Todos</option><option value="prazo">Prazo vencido</option><option value="inatividade">Sem interação</option><option value="cadastro">Cadastro</option><option value="situacao">Situação cadastral</option><option value="edicao">Edição bloqueada</option><option value="backup">Backup</option></select></div><div class="field"><label>Marca</label><select class="form-control" id="exceptionBrand"><option value="">Ambas</option><option>Uniasselvi</option><option>Unicesumar</option></select></div><div class="field"><label>Pesquisar</label><input class="form-control" id="exceptionSearch" placeholder="Empresa, CNPJ ou responsável..." /></div></div><div class="table-wrap"><table class="workflow-table"><thead><tr><th>Severidade</th><th>Concedente</th><th>Marca</th><th>Ocorrência</th><th>Ação</th></tr></thead><tbody id="exceptionTableBody"></tbody></table></div></div>
+          </section>
+          <section class="panel" id="panel-metas">
+            <div class="panel-header"><div><h2>Metas operacionais</h2><p>Acompanhe contatos, renovações e pendências tratadas no mês.</p></div><div class="panel-actions"><input class="form-control" id="goalMonth" type="month" style="max-width:180px"/><button class="btn btn-primary" id="newGoalButton" type="button" data-admin-only><i class="fa-solid fa-plus"></i>Definir meta</button></div></div>
+            <div class="workflow-grid" id="goalSummary"></div>
+            <div class="card"><div class="table-wrap"><table class="workflow-table"><thead><tr><th>Responsável</th><th>Contatos</th><th>Renovações</th><th>Pendências tratadas</th><th>Progresso geral</th><th data-admin-only>Ação</th></tr></thead><tbody id="goalTableBody"></tbody></table></div></div>
+          </section>`);
+      }
+
+      const companyGrid = $('#companyForm .form-grid');
+      const priorityField = $('#prioridade')?.closest('.field');
+      if (companyGrid && priorityField && !$('#etiquetas')) {
+        priorityField.insertAdjacentHTML('afterend','<div class="field span-2"><label>Etiquetas</label><input class="form-control" id="etiquetas" placeholder="Ex.: Procon, Urgência jurídica, Grande parceiro"/><span class="field-hint">Separe as etiquetas por vírgula.</span></div>');
+      }
+
+      const filtersGrid = $('#filtersCard .filters-grid');
+      const filtersActions = filtersGrid?.querySelector('.filters-actions');
+      if (filtersGrid && filtersActions && !$('#filterEtiqueta')) {
+        filtersActions.insertAdjacentHTML('beforebegin','<div class="field"><label>Etiqueta</label><select class="form-control filter" id="filterEtiqueta"><option value="">Todas</option></select></div><div class="field"><label>Inatividade</label><select class="form-control filter" id="filterInatividade"><option value="">Todas</option><option value="never">Nunca contatada</option><option value="6">6 dias ou mais</option><option value="11">Mais de 10 dias</option></select></div>');
+      }
+
+      const bulkToolbar = $('#bulkActionsToolbar');
+      if (bulkToolbar && !$('#bulkDistribute')) {
+        $('#bulkExportSelected')?.insertAdjacentHTML('afterend','<button class="btn btn-secondary btn-sm" id="bulkDistribute" type="button" data-admin-only><i class="fa-solid fa-people-arrows"></i>Distribuir</button>');
+      }
+
+      const settingsGrid = $('#panel-configuracoes .settings-grid');
+      if (settingsGrid && !$('#flowRulesSettingsCard')) {
+        settingsGrid.insertAdjacentHTML('beforeend', `
+          <div class="card settings-wide" id="flowRulesSettingsCard" data-admin-only><div class="card-title"><div><h3>Regras automáticas de fluxo</h3><span>Situação, próxima ação, prazo em dias úteis e escalonamento</span></div><button class="btn btn-primary btn-sm" id="newFlowRule" type="button"><i class="fa-solid fa-plus"></i>Nova regra</button></div><div id="flowRulesList"></div></div>
+          <div class="card settings-wide" id="maintenanceSettingsCard" data-admin-only><div class="card-title"><div><h3>Modo de manutenção</h3><span>Bloqueie temporariamente novas alterações durante atualizações</span></div></div><div class="form-grid"><div class="field"><label><input type="checkbox" id="maintenanceActive"/> Ativar modo de manutenção</label></div><div class="field span-2"><label>Mensagem aos operadores</label><input class="form-control" id="maintenanceMessage" placeholder="Sistema em manutenção. Tente novamente em alguns minutos."/></div><div class="field"><label>Encerrar automaticamente em</label><input class="form-control" id="maintenanceEnd" type="datetime-local"/></div></div><div style="margin-top:12px"><button class="btn btn-primary" id="saveMaintenance" type="button"><i class="fa-solid fa-floppy-disk"></i>Salvar configuração</button></div></div>`);
+      }
+
+      const notificationsPanel = $('#panel-notificacoes');
+      if (notificationsPanel && !$('#internalMentionsCard')) {
+        notificationsPanel.insertAdjacentHTML('afterbegin','<div class="card" id="internalMentionsCard" style="margin-bottom:16px"><div class="card-title"><div><h3>Menções internas</h3><span>Comentários nos quais você foi mencionado</span></div><button class="btn btn-secondary btn-sm" id="refreshMentions" type="button"><i class="fa-solid fa-rotate"></i>Atualizar</button></div><div id="internalMentionsList"></div></div>');
+      }
+
+      if (!$('#maintenanceBanner')) {
+        document.body.insertAdjacentHTML('afterbegin','<div class="maintenance-banner hidden" id="maintenanceBanner"><i class="fa-solid fa-screwdriver-wrench"></i><strong>Modo de manutenção ativo</strong><span id="maintenanceBannerText"></span></div>');
+      }
+      if (!$('#undoOperationBar')) {
+        document.body.insertAdjacentHTML('beforeend','<div class="undo-operation-bar hidden" id="undoOperationBar"><div><strong id="undoOperationTitle">Alteração realizada</strong><span id="undoOperationTime"></span></div><button class="btn btn-secondary btn-sm" id="undoOperationButton" type="button"><i class="fa-solid fa-rotate-left"></i>Desfazer</button><button class="icon-btn" id="dismissUndoOperation" type="button"><i class="fa-solid fa-xmark"></i></button></div>');
+      }
+
+      if (!$('#globalSearchBackdrop')) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div class="modal-backdrop" id="globalSearchBackdrop" aria-hidden="true"><div class="modal lg"><div class="modal-header"><div><h2>Pesquisa global</h2><p>Concedentes, CNPJ, contatos, observações, etiquetas e comentários.</p></div><button class="modal-close" type="button" data-close="globalSearchBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="field"><label>Pesquisar</label><input class="form-control global-search-input" id="globalSearchInput" placeholder="Digite ao menos 2 caracteres..." autocomplete="off"/></div><div id="globalSearchResults" style="margin-top:14px"></div></div></div></div>
+          <div class="modal-backdrop" id="flowRuleModalBackdrop" data-admin-only aria-hidden="true"><div class="modal lg"><form id="flowRuleForm"><div class="modal-header"><div><h2>Regra automática</h2><p>Configure a ação que será aplicada ao fluxo.</p></div><button class="modal-close" type="button" data-close="flowRuleModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><input type="hidden" id="flowRuleId"/><div class="form-grid"><div class="field span-2"><label>Nome</label><input class="form-control" id="flowRuleName" required/></div><div class="field"><label>Evento</label><select class="form-control" id="flowRuleEvent"><option value="email_enviado">E-mail confirmado como enviado</option><option value="situacao_alterada">Situação alterada</option><option value="prazo_atrasado">Prazo atrasado</option></select></div><div class="field"><label>Marca</label><select class="form-control" id="flowRuleBrand"><option value="">Ambas</option><option>Uniasselvi</option><option>Unicesumar</option></select></div><div class="field"><label>Situação de origem</label><select class="form-control" id="flowRuleOrigin"><option value="">Qualquer situação</option>${situacoesContato.map((item)=>`<option>${escapeHTML(item)}</option>`).join('')}</select></div><div class="field"><label>Situação de destino</label><select class="form-control" id="flowRuleDestination"><option value="">Não alterar</option>${situacoesContato.map((item)=>`<option>${escapeHTML(item)}</option>`).join('')}</select></div><div class="field span-2"><label>Próxima ação</label><input class="form-control" id="flowRuleNextAction"/></div><div class="field"><label>Dias úteis para o próximo contato</label><input class="form-control" id="flowRuleBusinessDays" type="number" min="0" max="365" value="0"/></div><div class="field"><label>Aplicar após quantos dias de atraso</label><input class="form-control" id="flowRuleOverdueDays" type="number" min="0" max="365" value="0"/></div><div class="field"><label>Prioridade de destino</label><select class="form-control" id="flowRulePriority"><option value="">Não alterar</option><option>Baixa</option><option>Média</option><option>Alta</option><option>Urgente</option></select></div><div class="field"><label><input type="checkbox" id="flowRuleActive" checked/> Regra ativa</label></div></div></div><div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="flowRuleModalBackdrop">Cancelar</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i>Salvar regra</button></div></form></div></div>
+          <div class="modal-backdrop" id="bulkPreviewBackdrop" aria-hidden="true"><div class="modal lg"><div class="modal-header"><div><h2>Revisar alterações</h2><p>Confira o impacto antes de confirmar.</p></div><button class="modal-close" type="button" data-close="bulkPreviewBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body" id="bulkPreviewBody"></div><div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="bulkPreviewBackdrop">Voltar</button><button class="btn btn-primary" id="confirmBulkPreview" type="button"><i class="fa-solid fa-check"></i>Confirmar alterações</button></div></div></div>
+          <div class="modal-backdrop" id="distributionBackdrop" data-admin-only aria-hidden="true"><div class="modal lg"><form id="distributionForm"><div class="modal-header"><div><h2>Distribuir trabalho</h2><p>Distribuição equilibrada conforme a carga atual.</p></div><button class="modal-close" type="button" data-close="distributionBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="summary-box" id="distributionSummary"></div><div class="field" style="margin-top:14px"><label>Responsáveis participantes</label><div class="checkbox-grid" id="distributionUsers"></div></div><div id="distributionPreview" style="margin-top:14px"></div></div><div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="distributionBackdrop">Cancelar</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-people-arrows"></i>Distribuir</button></div></form></div></div>
+          <div class="modal-backdrop" id="goalModalBackdrop" data-admin-only aria-hidden="true"><div class="modal"><form id="goalForm"><div class="modal-header"><div><h2>Definir meta operacional</h2><p>Metas mensais por usuário ou equipe.</p></div><button class="modal-close" type="button" data-close="goalModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="form-grid"><div class="field"><label>Competência</label><input class="form-control" id="goalCompetence" type="month" required/></div><div class="field"><label>Escopo</label><select class="form-control" id="goalScope"><option value="usuario">Usuário</option><option value="equipe">Equipe</option></select></div><div class="field span-2"><label>Usuário</label><select class="form-control" id="goalUser"></select></div><div class="field"><label>Meta de contatos</label><input class="form-control" id="goalContacts" type="number" min="0" value="0"/></div><div class="field"><label>Meta de renovações</label><input class="form-control" id="goalRenewals" type="number" min="0" value="0"/></div><div class="field"><label>Meta de pendências tratadas</label><input class="form-control" id="goalResolved" type="number" min="0" value="0"/></div></div></div><div class="modal-footer"><button class="btn btn-secondary" type="button" data-close="goalModalBackdrop">Cancelar</button><button class="btn btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i>Salvar meta</button></div></form></div></div>`);
+      }
+
+      const style = document.createElement('style');
+      style.id = 'automationSuiteStylesV880';
+      style.textContent = `
+        .tag-cloud{display:flex;gap:5px;flex-wrap:wrap}.workflow-tag{display:inline-flex;padding:3px 8px;border-radius:999px;background:rgba(29,25,52,.09);font-size:11px;font-weight:700}.maintenance-banner{position:fixed;top:0;left:0;right:0;z-index:9999;background:#7c2d12;color:#fff;padding:8px 18px;display:flex;gap:10px;align-items:center;justify-content:center}.maintenance-banner.hidden{display:none}.maintenance-banner:not(.hidden)~* .topbar{margin-top:36px}.undo-operation-bar{position:fixed;right:20px;bottom:20px;z-index:9999;background:var(--surface);border:1px solid var(--border);box-shadow:0 15px 40px rgba(15,23,42,.22);padding:12px 14px;border-radius:14px;display:flex;align-items:center;gap:12px;max-width:520px}.undo-operation-bar.hidden{display:none}.undo-operation-bar>div{display:grid;gap:2px}.undo-operation-bar span{font-size:12px;color:var(--muted)}.global-result{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--border)}.global-result:last-child{border-bottom:0}.global-result-icon{width:32px;height:32px;border-radius:10px;background:rgba(29,25,52,.08);display:grid;place-items:center}.comment-card{padding:12px;border:1px solid var(--border);border-radius:12px;margin-top:8px}.comment-meta{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:11px}.comment-body{white-space:pre-wrap;margin-top:7px}.mention-options{display:flex;gap:8px;flex-wrap:wrap;max-height:110px;overflow:auto}.mention-option{font-size:12px;border:1px solid var(--border);padding:6px 8px;border-radius:9px}.calendar-title{text-align:center;font-weight:800;font-size:18px;margin:15px 0}.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));border:1px solid var(--border);border-radius:12px;overflow:auto}.calendar-weekday{padding:8px;text-align:center;background:rgba(29,25,52,.06);font-size:12px;font-weight:800}.calendar-day{min-height:115px;padding:7px;border-top:1px solid var(--border);border-right:1px solid var(--border)}.calendar-day.outside{opacity:.45}.calendar-day-number{font-size:12px;font-weight:800}.calendar-event{display:block;width:100%;border:0;text-align:left;padding:4px 6px;margin-top:5px;border-radius:7px;font-size:10px;cursor:pointer;background:rgba(29,25,52,.1);color:var(--text)}.calendar-event.deadline{background:rgba(255,198,41,.28)}.progress-track{height:7px;background:rgba(148,163,184,.22);border-radius:999px;overflow:hidden}.progress-track>span{display:block;height:100%;background:currentColor;border-radius:999px}.exception-high{color:#b91c1c;font-weight:800}.exception-medium{color:#b45309;font-weight:800}.exception-low{color:#0369a1;font-weight:800}.read-only-maintenance{opacity:.65;pointer-events:none}.workflow-rule-row{display:grid;grid-template-columns:1.3fr .9fr 1fr 1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)}@media(max-width:900px){.calendar-grid{grid-template-columns:repeat(7,minmax(105px,1fr))}.workflow-rule-row{grid-template-columns:1fr}}`;
+      document.head.appendChild(style);
+    }
+
+    function renderMaintenanceMode() {
+      const active = Boolean(state.maintenance?.ativo && (!state.maintenance.fimEm || new Date(state.maintenance.fimEm) > new Date()));
+      const banner = $('#maintenanceBanner');
+      banner?.classList.toggle('hidden', !active);
+      if ($('#maintenanceBannerText')) $('#maintenanceBannerText').textContent = state.maintenance.mensagem || 'Alterações temporariamente bloqueadas para operadores.';
+      if ($('#maintenanceActive')) $('#maintenanceActive').checked = active;
+      if ($('#maintenanceMessage')) $('#maintenanceMessage').value = state.maintenance.mensagem || '';
+      if ($('#maintenanceEnd')) $('#maintenanceEnd').value = state.maintenance.fimEm ? new Date(state.maintenance.fimEm).toISOString().slice(0,16) : '';
+      document.body.dataset.maintenance = active ? 'true' : 'false';
+      const maintenanceControls = $$('button[type="submit"],.action-edit,.action-delete,.action-contact,.action-renew,[data-queue-contact],[data-queue-email],[data-bulk-company],#bulkOpenActions,#bulkDistribute,#newCompanyBtn');
+      if (active && !isAdmin()) {
+        maintenanceControls.forEach((element)=>{
+          if (!element.disabled) element.dataset.maintenanceDisabled = 'true';
+          element.disabled = true;
+          element.title = 'Indisponível durante o modo de manutenção';
+        });
+      } else {
+        maintenanceControls.forEach((element)=>{
+          if (element.dataset.maintenanceDisabled === 'true') {
+            element.disabled = false;
+            delete element.dataset.maintenanceDisabled;
+            if (element.title === 'Indisponível durante o modo de manutenção') element.removeAttribute('title');
+          }
+        });
+      }
+    }
+
+    async function loadMaintenanceConfiguration() {
+      if (!window.currentUser?.id || !window.remoteData?.getSystemConfiguration) return;
+      try {
+        const config = await window.remoteData.getSystemConfiguration('manutencao');
+        const value = config?.valor || {};
+        state.maintenance = {
+          ativo: Boolean(value.ativo),
+          mensagem: value.mensagem || '',
+          inicioEm: value.inicioEm || '',
+          fimEm: value.fimEm || ''
+        };
+      } catch (error) {
+        console.warn('[Manutenção]',error);
+      }
+      renderMaintenanceMode();
+    }
+
+    async function saveMaintenanceConfiguration() {
+      if (!ensureAdmin('alterar o modo de manutenção')) return;
+      const active = Boolean($('#maintenanceActive')?.checked);
+      const value = {
+        ativo: active,
+        mensagem: String($('#maintenanceMessage')?.value || '').trim(),
+        inicioEm: active ? new Date().toISOString() : '',
+        fimEm: $('#maintenanceEnd')?.value ? new Date($('#maintenanceEnd').value).toISOString() : ''
+      };
+      confirmAction(active ? 'Ativar modo de manutenção' : 'Desativar modo de manutenção',active ? 'Operadores poderão consultar os dados, mas novos salvamentos serão bloqueados. Confirmar?' : 'Deseja liberar novamente as alterações para os operadores?',async()=>{
+        try {
+          await window.remoteData.setSystemConfiguration('manutencao', value);
+          state.maintenance = value;
+          renderMaintenanceMode();
+          toast('success','Configuração salva',active ? 'Modo de manutenção ativado.' : 'Modo de manutenção desativado.');
+        } catch (error) {
+          toast('error','Falha ao salvar',error.message || 'Não foi possível alterar o modo de manutenção.');
+        }
+      }, active);
+    }
+
+    async function loadFlowRules({ silent = true } = {}) {
+      if (!window.currentUser?.id || !window.remoteData?.listFlowRules || state.flowRulesLoading) return;
+      state.flowRulesLoading = true;
+      try { state.flowRules = await window.remoteData.listFlowRules(); }
+      catch (error) { if (!silent) toast('warning','Regras indisponíveis',error.message); }
+      finally { state.flowRulesLoading = false; renderFlowRulesSettings(); }
+    }
+
+    function renderFlowRulesSettings() {
+      const host = $('#flowRulesList');
+      if (!host) return;
+      host.innerHTML = state.flowRules.length ? state.flowRules.map((rule)=>`<div class="workflow-rule-row"><div><strong>${escapeHTML(rule.nome)}</strong><small style="display:block;color:var(--muted)">${escapeHTML(rule.marca || 'Ambas as marcas')}</small></div><span>${escapeHTML(rule.evento.replaceAll('_',' '))}</span><span>${escapeHTML(rule.situacaoOrigem || 'Qualquer situação')} → ${escapeHTML(rule.situacaoDestino || 'Sem alteração')}</span><span>${rule.evento === 'prazo_atrasado' ? `${rule.diasAtraso} dia(s) de atraso` : `${rule.diasUteis} dia(s) útil(eis)`}${rule.prioridadeDestino ? ` • ${escapeHTML(rule.prioridadeDestino)}` : ''}</span><div class="actions-cell"><button class="btn btn-secondary btn-icon" data-edit-flow-rule="${rule.id}" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="btn btn-danger btn-icon" data-delete-flow-rule="${rule.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button></div></div>`).join('') : emptyState('Nenhuma regra cadastrada','Crie regras para automatizar situação, ação, prazo e prioridade.');
+    }
+
+    function openFlowRuleEditor(id = '') {
+      const rule = state.flowRules.find((item)=>item.id === id) || {};
+      $('#flowRuleForm')?.reset();
+      $('#flowRuleId').value = rule.id || '';
+      $('#flowRuleName').value = rule.nome || '';
+      $('#flowRuleEvent').value = rule.evento || 'email_enviado';
+      $('#flowRuleBrand').value = rule.marca || '';
+      $('#flowRuleOrigin').value = rule.situacaoOrigem || '';
+      $('#flowRuleDestination').value = rule.situacaoDestino || '';
+      $('#flowRuleNextAction').value = rule.proximaAcao || '';
+      $('#flowRuleBusinessDays').value = Number(rule.diasUteis || 0);
+      $('#flowRuleOverdueDays').value = Number(rule.diasAtraso || 0);
+      $('#flowRulePriority').value = rule.prioridadeDestino || '';
+      $('#flowRuleActive').checked = rule.ativo !== false;
+      openModal('flowRuleModalBackdrop');
+    }
+
+    async function saveFlowRuleEditor(event) {
+      event.preventDefault();
+      if (!ensureAdmin('salvar regras automáticas')) return;
+      try {
+        const saved = await window.remoteData.saveFlowRule({
+          id: $('#flowRuleId').value,
+          nome: $('#flowRuleName').value,
+          evento: $('#flowRuleEvent').value,
+          marca: $('#flowRuleBrand').value,
+          situacaoOrigem: $('#flowRuleOrigin').value,
+          situacaoDestino: $('#flowRuleDestination').value,
+          proximaAcao: $('#flowRuleNextAction').value,
+          diasUteis: $('#flowRuleBusinessDays').value,
+          diasAtraso: $('#flowRuleOverdueDays').value,
+          prioridadeDestino: $('#flowRulePriority').value,
+          ativo: $('#flowRuleActive').checked
+        });
+        const index = state.flowRules.findIndex((item)=>item.id === saved.id);
+        if (index >= 0) state.flowRules[index] = saved; else state.flowRules.push(saved);
+        closeModal('flowRuleModalBackdrop');
+        renderFlowRulesSettings();
+        toast('success','Regra salva','A automação foi atualizada.');
+      } catch (error) { toast('error','Falha ao salvar regra',error.message); }
+    }
+
+    function matchingFlowRule(eventName, company, originStatus = '') {
+      const brand = normalizeBrand(company?.marca);
+      const candidates = state.flowRules.filter((rule)=>rule.ativo && rule.evento === eventName && (!rule.marca || rule.marca === brand) && (!rule.situacaoOrigem || rule.situacaoOrigem === originStatus));
+      return candidates.sort((a,b)=>(b.diasAtraso || 0) - (a.diasAtraso || 0))[0] || null;
+    }
+
+    async function applyAutomaticFlowRule(company, eventName, originStatus = '') {
+      const rule = matchingFlowRule(eventName, company, originStatus);
+      if (!rule || !company) return false;
+      const latest = latestContact(company);
+      const nextDate = Number(rule.diasUteis || 0) > 0 ? addBusinessDaysISO(rule.diasUteis) : latest?.proximaData || '';
+      if (latest && (rule.situacaoDestino || rule.proximaAcao || nextDate)) {
+        const changed = {
+          ...latest,
+          resultado: rule.situacaoDestino || latest.resultado || company.situacao,
+          proximaAcao: rule.proximaAcao || latest.proximaAcao || '',
+          proximaData: nextDate
+        };
+        const saved = await window.remoteData.updateContact(company.id, changed, company);
+        const index = company.contatos.findIndex((item)=>item.id === saved.id);
+        if (index >= 0) company.contatos[index] = saved;
+        company.situacao = saved.resultado || company.situacao;
+      } else if (rule.situacaoDestino) {
+        await window.remoteData.updateCompanyManagement(company.id,{ situacao:rule.situacaoDestino });
+        company.situacao = rule.situacaoDestino;
+      }
+      if (rule.prioridadeDestino && priorityRankV880[rule.prioridadeDestino] > priorityRankV880[company.prioridade || 'Média']) {
+        await window.remoteData.updateCompanyManagement(company.id,{ prioridade:rule.prioridadeDestino });
+        company.prioridade = rule.prioridadeDestino;
+      }
+      return true;
+    }
+
+    async function evaluateEscalationRules() {
+      if (!isAdmin() || !state.flowRules.length || !window.currentUser?.id) return;
+      const stamp = todayISO();
+      if (localStorage.getItem('cloudconvenios_escalation_check') === stamp) return;
+      const overdueRules = state.flowRules.filter((rule)=>rule.ativo && rule.evento === 'prazo_atrasado').sort((a,b)=>b.diasAtraso-a.diasAtraso);
+      if (!overdueRules.length) return;
+      let updated = 0;
+      for (const company of state.data.concedentes.map(normalizeCompany)) {
+        if (!company.proximaData || company.proximaData >= stamp) continue;
+        const overdue = Math.max(1, daysBetween(parseDate(company.proximaData), parseDate(stamp)));
+        const rule = overdueRules.find((item)=>overdue >= Number(item.diasAtraso || 0) && (!item.marca || item.marca === company.marca));
+        if (!rule?.prioridadeDestino || priorityRankV880[rule.prioridadeDestino] <= priorityRankV880[company.prioridade || 'Média']) continue;
+        try {
+          await window.remoteData.updateCompanyManagement(company.id,{ prioridade:rule.prioridadeDestino });
+          company.prioridade = rule.prioridadeDestino;
+          updated += 1;
+        } catch (error) { console.warn('[Escalonamento]',company.id,error); }
+      }
+      localStorage.setItem('cloudconvenios_escalation_check',stamp);
+      if (updated) await loadRemoteData({silent:true});
+    }
+
+    async function loadOperators() {
+      if (!window.currentUser?.id || !window.remoteData?.listActiveOperators) return;
+      try { state.operators = await window.remoteData.listActiveOperators(); }
+      catch (error) { console.warn('[Operadores]',error); }
+      renderOperatorOptions();
+    }
+
+    function renderOperatorOptions() {
+      const options = state.operators.map((user)=>`<option value="${escapeHTML(user.id)}">${escapeHTML(user.nome)}${user.email ? ` — ${escapeHTML(user.email)}` : ''}</option>`).join('');
+      if ($('#goalUser')) $('#goalUser').innerHTML = options;
+      const mentionHost = $('#commentMentionOptions');
+      if (mentionHost) mentionHost.innerHTML = state.operators.filter((user)=>user.email && user.id !== window.currentUser?.id).map((user)=>`<label class="mention-option"><input type="checkbox" name="commentMention" value="${escapeHTML(user.email.toLowerCase())}"/> @${escapeHTML(user.nome || user.email)}</label>`).join('') || '<span class="muted">Nenhum outro usuário disponível.</span>';
+      const responsibleValues = [...new Set(state.operators.map((user)=>user.nome).filter(Boolean))];
+      const select = $('#calendarResponsible');
+      if (select) select.innerHTML = '<option value="">Todos</option>' + responsibleValues.map((name)=>`<option>${escapeHTML(name)}</option>`).join('');
+    }
+
+    async function renderCompanyComments(companyId) {
+      const host = $('#companyInternalComments');
+      if (!host) return;
+      host.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i><strong>Carregando comentários...</strong></div>';
+      try {
+        const comments = await window.remoteData.listCompanyComments(companyId);
+        state.commentCache.set(companyId, comments);
+        host.innerHTML = comments.length ? comments.map((comment)=>`<div class="comment-card"><div class="comment-meta"><span><strong>${escapeHTML(comment.usuarioNome || comment.usuarioEmail || 'Usuário')}</strong>${comment.mencoes.length ? ` • menciona ${comment.mencoes.map((item)=>escapeHTML(item)).join(', ')}` : ''}</span><span>${new Date(comment.createdAt).toLocaleString('pt-BR')}</span></div><div class="comment-body">${escapeHTML(comment.texto)}</div>${comment.usuarioId === window.currentUser?.id || isAdmin() ? `<div style="margin-top:7px;text-align:right"><button class="btn btn-danger btn-sm" data-delete-comment="${comment.id}" data-company-id="${companyId}"><i class="fa-solid fa-trash"></i>Excluir</button></div>` : ''}</div>`).join('') : emptyState('Nenhum comentário interno','Registre uma orientação ou mencione outro usuário.');
+      } catch (error) { host.innerHTML = `<div class="summary-box">${escapeHTML(error.message || 'Não foi possível carregar os comentários.')}</div>`; }
+    }
+
+    async function saveInternalComment(event) {
+      event.preventDefault();
+      if (!ensureOperationalWrite('registrar comentários')) return;
+      const companyId = $('#internalCommentCompanyId')?.value;
+      const text = String($('#internalCommentText')?.value || '').trim();
+      const mentions = $$('input[name="commentMention"]:checked').map((input)=>input.value);
+      try {
+        await window.remoteData.createInternalComment(companyId,{ texto:text, mencoes:mentions });
+        $('#internalCommentText').value = '';
+        $$('input[name="commentMention"]:checked').forEach((input)=>{input.checked=false;});
+        await renderCompanyComments(companyId);
+        toast('success','Comentário registrado',mentions.length ? 'Os usuários mencionados verão o recado nas notificações.' : 'O comentário foi adicionado ao histórico interno.');
+      } catch (error) { toast('error','Falha ao comentar',error.message); }
+    }
+
+    async function loadMyMentions() {
+      if (!window.currentUser?.id || !window.remoteData?.listMyMentions) return;
+      try { state.myMentions = await window.remoteData.listMyMentions(); }
+      catch (error) { console.warn('[Menções]',error); state.myMentions = []; }
+      renderMyMentions();
+    }
+
+    function renderMyMentions() {
+      const host = $('#internalMentionsList');
+      if (!host) return;
+      host.innerHTML = state.myMentions.length ? state.myMentions.map((mention)=>`<div class="list-row"><span class="list-dot" style="background:${mention.lida ? '#94a3b8' : '#f59e0b'}"></span><div class="list-main"><strong>${escapeHTML(mention.company?.nomeFantasia || mention.company?.razaoSocial || 'Concedente')}</strong><small>${escapeHTML(mention.usuarioNome || 'Usuário')} • ${new Date(mention.createdAt).toLocaleString('pt-BR')}</small><span>${escapeHTML(mention.texto)}</span></div><div class="actions-cell"><button class="btn btn-secondary btn-sm" data-open-mention-company="${mention.companyId}">Abrir</button>${mention.lida ? '' : `<button class="btn btn-primary btn-sm" data-read-mention="${mention.id}">Marcar lida</button>`}</div></div>`).join('') : emptyState('Nenhuma menção','Você não possui comentários internos pendentes.');
+    }
+
+    async function runGlobalSearch() {
+      const term = String($('#globalSearchInput')?.value || '').trim();
+      const host = $('#globalSearchResults');
+      if (!host) return;
+      if (term.length < 2) { host.innerHTML = emptyState('Digite ao menos 2 caracteres','A busca consulta cadastros, contatos, etiquetas e comentários.'); return; }
+      const q = normalize(term);
+      const results = [];
+      state.data.concedentes.map(normalizeCompany).forEach((company)=>{
+        const companyHay = normalize([company.cnpj,company.razaoSocial,company.nomeFantasia,company.marca,company.estado,company.cidade,company.polo,company.email,company.telefone,company.responsavelAcompanhamento,company.observacoes,(company.etiquetas||[]).join(' ')].join(' '));
+        if (companyHay.includes(q)) results.push({type:'Concedente',icon:'fa-building',companyId:company.id,title:company.nomeFantasia||company.razaoSocial,subtitle:`${company.cnpj || 'Sem CNPJ'} • ${company.marca || 'Sem marca'}`});
+        (company.contatos || []).forEach((contact)=>{
+          const hay = normalize([contact.responsavel,contact.forma,contact.pessoa,contact.resultado,contact.proximaAcao,contact.observacoes].join(' '));
+          if (hay.includes(q)) results.push({type:'Contato',icon:'fa-phone',companyId:company.id,title:company.nomeFantasia||company.razaoSocial,subtitle:`${formatDate(contact.data)} • ${contact.resultado || contact.forma}`});
+        });
+      });
+      try {
+        const comments = await window.remoteData.searchInternalComments(term);
+        comments.forEach((comment)=>results.push({type:'Comentário',icon:'fa-comments',companyId:comment.companyId,title:comment.company?.nomeFantasia||comment.company?.razaoSocial||'Concedente',subtitle:`${comment.usuarioNome || 'Usuário'} • ${String(comment.texto).slice(0,120)}`}));
+      } catch (error) { console.warn('[Pesquisa de comentários]',error); }
+      const unique = results.filter((item,index,array)=>array.findIndex((other)=>other.type===item.type&&other.companyId===item.companyId&&other.subtitle===item.subtitle)===index).slice(0,60);
+      host.innerHTML = unique.length ? `<div class="card">${unique.map((item)=>`<button class="global-result" data-global-company="${item.companyId}" type="button"><span class="global-result-icon"><i class="fa-solid ${item.icon}"></i></span><span style="text-align:left"><strong>${escapeHTML(item.title)}</strong><small style="display:block;color:var(--muted)">${escapeHTML(item.type)} • ${escapeHTML(item.subtitle)}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('')}</div>` : emptyState('Nenhum resultado','Tente outro CNPJ, nome, etiqueta, contato ou comentário.');
+    }
+
+    function updateTagFilterOptions() {
+      const select = $('#filterEtiqueta');
+      if (!select) return;
+      const current = select.value;
+      const tags = [...new Set(state.data.concedentes.flatMap((company)=>normalizeTags(company.etiquetas)))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      select.innerHTML = '<option value="">Todas</option>' + tags.map((tag)=>`<option ${tag===current?'selected':''}>${escapeHTML(tag)}</option>`).join('');
+    }
+
+    const baseResetCompanyFormV880 = resetCompanyForm;
+    resetCompanyForm = function() {
+      baseResetCompanyFormV880();
+      if ($('#etiquetas')) $('#etiquetas').value = '';
+      if ($('#tipoNatureza')) $('#tipoNatureza').value = 'Não identificado';
+    };
+
+    const baseOpenCompanyFormV880 = openCompanyForm;
+    openCompanyForm = function(id = null, preset = null) {
+      baseOpenCompanyFormV880(id,preset);
+      const company = id ? state.data.concedentes.find((item)=>item.id===id) : preset;
+      if ($('#etiquetas')) $('#etiquetas').value = normalizeTags(company?.etiquetas).join(', ');
+      if ($('#tipoNatureza')) $('#tipoNatureza').value = legalNatureType(company?.tipoNatureza || company?.tipo_natureza || '', company?.naturezaJuridica || '');
+    };
+
+    const baseGetCompanyFormDataV880 = getCompanyFormData;
+    getCompanyFormData = function() {
+      const data = baseGetCompanyFormDataV880();
+      data.etiquetas = normalizeTags($('#etiquetas')?.value || '');
+      data.tipoNatureza = legalNatureType($('#tipoNatureza')?.value || '', data.naturezaJuridica || '');
+      return normalizeCompany(data);
+    };
+
+    const baseUpdateFilterOptionsV880 = updateFilterOptions;
+    updateFilterOptions = function() {
+      baseUpdateFilterOptionsV880();
+      runOptionalFeature('filtro de etiquetas', updateTagFilterOptions);
+    };
+
+    const baseGetFilteredCompaniesV880 = getFilteredCompanies;
+    getFilteredCompanies = function() {
+      const baseRows = baseGetFilteredCompaniesV880();
+      return runOptionalFeature('filtros de etiqueta e inatividade', () => {
+        let rows = baseRows;
+        const tag = $('#filterEtiqueta')?.value || '';
+        const inactivity = $('#filterInatividade')?.value || '';
+        if (tag) rows = rows.filter((company)=>normalizeTags(company.etiquetas).includes(tag));
+        if (inactivity === 'never') rows = rows.filter((company)=>inactivityInfo(company).days === null);
+        if (inactivity === '6') rows = rows.filter((company)=>inactivityInfo(company).days !== null && inactivityInfo(company).days >= 6);
+        if (inactivity === '11') rows = rows.filter((company)=>inactivityInfo(company).days !== null && inactivityInfo(company).days > 10);
+        return rows;
+      }, baseRows);
+    };
+
+    function enhanceCompanyTableV880() {
+      const table = $('#companiesTableBody')?.closest('table');
+      const header = table?.querySelector('thead tr');
+      if (!header) return;
+      const actionHeader = header.lastElementChild;
+      if (!header.querySelector('[data-v880="tags"]')) actionHeader?.insertAdjacentHTML('beforebegin','<th data-v880="tags">Etiquetas</th><th data-v880="inactivity">Inatividade</th>');
+      const rows = currentCompanyPageRows();
+      $$('#companiesTableBody tr').forEach((row,index)=>{
+        const company = rows[index];
+        if (!company || row.children.length <= 1 || row.querySelector('[data-v880-cell="tags"]')) return;
+        const action = row.lastElementChild;
+        action?.insertAdjacentHTML('beforebegin',`<td data-v880-cell="tags">${tagBadges(company.etiquetas)}</td><td data-v880-cell="inactivity">${inactivityBadge(company)}</td>`);
+      });
+    }
+
+    const baseRenderCompaniesV880 = renderCompanies;
+    renderCompanies = function() {
+      baseRenderCompaniesV880();
+      runOptionalFeature('etiquetas e inatividade na tabela', enhanceCompanyTableV880);
+    };
+
+    const baseViewCompanyV880 = viewCompany;
+    viewCompany = function(id) {
+      baseViewCompanyV880(id);
+      runOptionalFeature('comentários, etiquetas e inatividade', () => {
+        const company = state.data.concedentes.find((item)=>item.id===id);
+        if (!company) return;
+        const host = $('#viewModalBody');
+        if (!host) return;
+        host.insertAdjacentHTML('beforeend',`<div class="card" style="margin-top:18px"><div class="card-title"><div><h3>Etiquetas e inatividade</h3><span>Classificação e tempo desde a última interação</span></div></div><div class="detail-grid"><div class="detail-item"><span>Etiquetas</span><strong>${tagBadges(company.etiquetas)}</strong></div><div class="detail-item"><span>Última interação</span><strong>${inactivityBadge(company)}</strong></div></div></div><div class="card" style="margin-top:18px"><div class="card-title"><div><h3>Comentários internos</h3><span>Orientações e menções entre os usuários</span></div></div>${canEdit() && !maintenanceBlocksWrites() ? `<form id="internalCommentForm"><input type="hidden" id="internalCommentCompanyId" value="${company.id}"/><div class="field"><label>Comentário</label><textarea class="form-control" id="internalCommentText" rows="3" required placeholder="Registre uma orientação interna..."></textarea></div><div class="field" style="margin-top:8px"><label>Mencionar usuários</label><div class="mention-options" id="commentMentionOptions"></div></div><div style="margin-top:8px;text-align:right"><button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-comment"></i>Registrar comentário</button></div></form>` : ''}<div id="companyInternalComments" style="margin-top:12px"></div></div>`);
+        renderOperatorOptions();
+        renderCompanyComments(id);
+      });
+    };
+
+    function buildBulkPreview(ids,payload) {
+      const companies = state.data.concedentes.filter((company)=>ids.includes(company.id));
+      const changes = [];
+      if (payload.responsavelAcompanhamento) changes.push(['Responsável',payload.responsavelAcompanhamento === '__CLEAR__' ? 'Sem responsável' : payload.responsavelAcompanhamento]);
+      if (payload.prioridade) changes.push(['Prioridade',payload.prioridade]);
+      if (payload.situacao) changes.push(['Situação',payload.situacao]);
+      if (payload.proximaAcao) changes.push(['Próxima ação',payload.proximaAcao]);
+      if (payload.proximaData) changes.push(['Próximo contato',formatDate(payload.proximaData)]);
+      return `<div class="workflow-grid"><div class="workflow-card"><span>Concedentes afetadas</span><strong>${companies.length}</strong></div><div class="workflow-card"><span>Campos alterados</span><strong>${changes.length}</strong></div></div><div class="summary-box" style="margin-top:12px"><i class="fa-solid fa-circle-info"></i>${changes.map(([label,value])=>`<strong>${escapeHTML(label)}:</strong> ${escapeHTML(value)}`).join(' • ')}</div><div class="table-wrap" style="margin-top:12px"><table class="workflow-table"><thead><tr><th>Concedente</th><th>Marca</th><th>Responsável atual</th><th>Prioridade atual</th><th>Situação atual</th></tr></thead><tbody>${companies.slice(0,50).map((company)=>`<tr><td>${escapeHTML(company.nomeFantasia||company.razaoSocial)}</td><td>${escapeHTML(company.marca||'—')}</td><td>${escapeHTML(company.responsavelAcompanhamento||'Sem responsável')}</td><td>${escapeHTML(company.prioridade||'Média')}</td><td>${escapeHTML(company.situacao||'—')}</td></tr>`).join('')}</tbody></table></div>${companies.length>50?`<div class="summary-box">Prévia limitada aos primeiros 50 registros de ${companies.length}.</div>`:''}`;
+    }
+
+    async function performBulkActionsV880(ids,payload) {
+      const button = $('#confirmBulkPreview');
+      if (button) { button.disabled=true; button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>Aplicando…'; }
+      let operationId = null;
+      try {
+        operationId = await window.remoteData.registerUndoOperation('acao_em_massa',`Ações em massa em ${ids.length} concedente(s)`,ids,10);
+        const result = await window.remoteData.bulkUpdateCompanies(ids,payload);
+        closeModal('bulkPreviewBackdrop'); closeModal('bulkActionModalBackdrop');
+        state.bulkSelectedIds.clear();
+        await loadRemoteData({silent:true});
+        await loadUndoOperations(operationId);
+        toast('success','Ações concluídas',`${Number(result?.updated || ids.length)} concedente(s) atualizada(s).`);
+      } catch (error) {
+        if (operationId) window.remoteData.deleteUndoOperation(operationId).catch(()=>{});
+        toast('error','Falha nas ações em massa',error.message || 'Não foi possível atualizar os registros.');
+      } finally { if (button) { button.disabled=false; button.innerHTML='<i class="fa-solid fa-check"></i>Confirmar alterações'; } }
+    }
+
+    applyBulkActions = async function(event) {
+      event.preventDefault();
+      if (!ensureOperationalWrite('aplicar ações em massa') || !canEdit()) return;
+      const ids = [...state.bulkSelectedIds];
+      if (!ids.length) return;
+      const responsibleRaw = String($('#bulkResponsible')?.value || '').trim();
+      const payload = {
+        responsavelAcompanhamento: normalize(responsibleRaw) === 'sem responsavel' ? '__CLEAR__' : responsibleRaw,
+        prioridade: $('#bulkPriority')?.value || '',
+        situacao: $('#bulkStatus')?.value || '',
+        proximaAcao: String($('#bulkNextAction')?.value || '').trim(),
+        proximaData: $('#bulkNextDate')?.value || ''
+      };
+      if (!Object.values(payload).some(Boolean)) { toast('warning','Nenhuma alteração','Preencha ao menos um campo.'); return; }
+      state.pendingBulkPreview = { ids,payload };
+      $('#bulkPreviewBody').innerHTML = buildBulkPreview(ids,payload);
+      openModal('bulkPreviewBackdrop');
+    };
+
+    async function openDistribution() {
+      if (!ensureAdmin('distribuir concedentes') || !ensureOperationalWrite('distribuir concedentes')) return;
+      const ids = [...state.bulkSelectedIds];
+      if (!ids.length) { toast('warning','Nenhuma seleção','Selecione as concedentes que serão distribuídas.'); return; }
+      await loadOperators();
+      const host = $('#distributionUsers');
+      host.innerHTML = state.operators.map((user)=>`<label class="check-option"><input type="checkbox" name="distributionUser" value="${user.id}" checked/> ${escapeHTML(user.nome)}</label>`).join('') || '<span>Nenhum usuário ativo.</span>';
+      $('#distributionSummary').innerHTML = `<i class="fa-solid fa-people-arrows"></i><strong>${ids.length}</strong> concedente(s) selecionada(s). A distribuição considerará a carga atual de cada responsável.`;
+      $('#distributionPreview').innerHTML = '';
+      openModal('distributionBackdrop');
+    }
+
+    function calculateBalancedDistribution(ids,userIds) {
+      const users = state.operators.filter((user)=>userIds.includes(user.id));
+      const workload = new Map(users.map((user)=>[user.id,state.data.concedentes.filter((company)=>normalize(company.responsavelAcompanhamento)===normalize(user.nome)).length]));
+      const assignment = new Map(users.map((user)=>[user.id,[]]));
+      const companies = state.data.concedentes.filter((company)=>ids.includes(company.id)).sort((a,b)=>(priorityRankV880[b.prioridade]||2)-(priorityRankV880[a.prioridade]||2));
+      companies.forEach((company)=>{
+        const user = [...users].sort((a,b)=>(workload.get(a.id)||0)-(workload.get(b.id)||0))[0];
+        if (!user) return;
+        assignment.get(user.id).push(company.id);
+        workload.set(user.id,(workload.get(user.id)||0)+1);
+      });
+      return { users,assignment,workload };
+    }
+
+    async function submitDistribution(event) {
+      event.preventDefault();
+      const ids = [...state.bulkSelectedIds];
+      const userIds = $$('input[name="distributionUser"]:checked').map((input)=>input.value);
+      if (!ids.length || !userIds.length) { toast('warning','Distribuição incompleta','Selecione ao menos um responsável.'); return; }
+      const plan = calculateBalancedDistribution(ids,userIds);
+      const preview = [...plan.assignment.entries()].map(([id,list])=>`${state.operators.find((user)=>user.id===id)?.nome}: ${list.length}`).join(' • ');
+      confirmAction('Confirmar distribuição',`${preview}. Deseja aplicar a distribuição equilibrada?`,async()=>{
+        let operationId = null;
+        try {
+          operationId = await window.remoteData.registerUndoOperation('distribuicao',`Distribuição de ${ids.length} concedente(s)`,ids,10);
+          for (const [userId,list] of plan.assignment.entries()) {
+            if (!list.length) continue;
+            const user = state.operators.find((item)=>item.id===userId);
+            await window.remoteData.bulkUpdateCompanies(list,{responsavelAcompanhamento:user.nome});
+          }
+          closeModal('distributionBackdrop'); state.bulkSelectedIds.clear();
+          await loadRemoteData({silent:true}); await loadUndoOperations(operationId);
+          toast('success','Distribuição concluída',preview);
+        } catch (error) {
+          if (operationId) window.remoteData.deleteUndoOperation(operationId).catch(()=>{});
+          toast('error','Falha na distribuição',error.message);
+        }
+      },false);
+    }
+
+    async function loadUndoOperations(preferredId = '') {
+      if (!window.currentUser?.id || !window.remoteData?.listUndoOperations) return;
+      try { state.undoOperations = await window.remoteData.listUndoOperations(); }
+      catch (error) { state.undoOperations = []; }
+      const operation = state.undoOperations.find((item)=>item.id===preferredId) || state.undoOperations[0];
+      const bar = $('#undoOperationBar');
+      bar?.classList.toggle('hidden',!operation);
+      if (operation) {
+        bar.dataset.operationId = operation.id;
+        $('#undoOperationTitle').textContent = operation.descricao || 'Alteração realizada';
+        const minutes = Math.max(0,Math.ceil((new Date(operation.expiresAt)-new Date())/60000));
+        $('#undoOperationTime').textContent = `Disponível por aproximadamente ${minutes} minuto(s).`;
+      }
+    }
+
+    async function undoLatestOperation() {
+      const id = $('#undoOperationBar')?.dataset.operationId;
+      if (!id) return;
+      confirmAction('Desfazer alteração','Os valores anteriores das concedentes serão restaurados. Deseja continuar?',async()=>{
+        try {
+          const result = await window.remoteData.undoOperation(id);
+          await loadRemoteData({silent:true});
+          await loadUndoOperations();
+          toast('success','Alteração desfeita',`${Number(result?.restored || 0)} cadastro(s) restaurado(s).`);
+        } catch (error) { toast('error','Não foi possível desfazer',error.message); }
+      },false);
+    }
+
+    const baseSaveCompanyV880 = saveCompany;
+    saveCompany = async function(data) {
+      if (!ensureOperationalWrite('salvar concedentes')) return;
+      const previous = state.data.concedentes.find((company)=>company.id===data.id);
+      let operationId = null;
+      const before = previous ? JSON.stringify(normalizeCompany(previous)) : '';
+      if (previous) {
+        try { operationId = await window.remoteData.registerUndoOperation('edicao_individual',`Edição de ${previous.nomeFantasia || previous.razaoSocial}`,[previous.id],10); }
+        catch (error) { console.warn('[Desfazer]',error); }
+      }
+      await baseSaveCompanyV880(data);
+      const after = state.data.concedentes.find((company)=>company.id===data.id);
+      if (operationId && after && JSON.stringify(normalizeCompany(after)) !== before) await loadUndoOperations(operationId);
+      else if (operationId) window.remoteData.deleteUndoOperation(operationId).catch(()=>{});
+    };
+
+    const baseSaveContactV880 = saveContact;
+    saveContact = async function() {
+      if (!ensureOperationalWrite('registrar contatos')) return;
+      const companyId = $('#contactCompanySelect')?.value;
+      const company = state.data.concedentes.find((item)=>item.id===companyId);
+      const origin = company?.situacao || '';
+      await baseSaveContactV880();
+      if (company && company.situacao !== origin) {
+        try { await applyAutomaticFlowRule(company,'situacao_alterada',origin); renderAll(); }
+        catch (error) { console.warn('[Regra automática]',error); }
+      }
+    };
+
+    const baseConfirmOutlookEmailV880 = confirmOutlookEmail;
+    confirmOutlookEmail = async function(sent) {
+      if (sent && !ensureOperationalWrite('registrar o envio de e-mail')) return;
+      const pending = state.pendingEmail ? {...state.pendingEmail} : null;
+      const company = pending ? state.data.concedentes.find((item)=>item.id===pending.companyId) : null;
+      const origin = company?.situacao || '';
+      await baseConfirmOutlookEmailV880(sent);
+      if (sent && company) {
+        try {
+          const applied = await applyAutomaticFlowRule(company,'email_enviado',origin);
+          if (applied) { await loadRemoteData({silent:true}); toast('info','Fluxo automático aplicado','Situação, próxima ação e prazo foram ajustados pela regra configurada.'); }
+        } catch (error) { toast('warning','Envio registrado',`A regra automática não pôde ser aplicada: ${error.message}`); }
+      }
+    };
+
+    const baseSubmitOutlookMessageV880 = submitOutlookMessage;
+    submitOutlookMessage = function(event) {
+      if (!ensureOperationalWrite('preparar novos e-mails')) { event?.preventDefault?.(); return; }
+      return baseSubmitOutlookMessageV880(event);
+    };
+
+    function monthKey(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
+    function monthDateValue(value) { return value ? `${value}-01` : `${monthKey()}-01`; }
+
+    async function loadGoals() {
+      if (!window.currentUser?.id || !window.remoteData?.listOperationalGoals) return;
+      const competence = monthDateValue($('#goalMonth')?.value || monthKey());
+      try { state.goals = await window.remoteData.listOperationalGoals(competence); }
+      catch (error) { state.goals = []; console.warn('[Metas]',error); }
+      renderGoals();
+    }
+
+    function actualGoalMetrics(userName, competence) {
+      const start = competence;
+      const endDate = new Date(`${competence}T12:00:00`); endDate.setMonth(endDate.getMonth()+1); endDate.setDate(0);
+      const end = endDate.toISOString().slice(0,10);
+      const companies = state.data.concedentes.map(normalizeCompany);
+      const matchesUser = (contact)=>!userName || userName==='Equipe' || normalize(contact.responsavel)===normalize(userName);
+      const contacts = companies.flatMap((company)=>(company.contatos||[]).map((contact)=>({company,contact}))).filter(({contact})=>contact.data>=start&&contact.data<=end&&matchesUser(contact));
+      return {
+        contacts: contacts.length,
+        renewals: contacts.filter(({contact})=>contact.resultado==='Renovado').length,
+        resolved: contacts.filter(({contact})=>['Documentação recebida','Em análise','Renovação em andamento','Renovado'].includes(contact.resultado)).length
+      };
+    }
+
+    function progressPercent(actual,target) { return target > 0 ? Math.min(100,Math.round((actual/target)*100)) : 0; }
+    function progressBar(actual,target) { const pct=progressPercent(actual,target); return `<div><strong>${actual}/${target}</strong><div class="progress-track"><span style="width:${pct}%"></span></div><small>${pct}%</small></div>`; }
+
+    function renderGoals() {
+      if (!$('#goalTableBody')) return;
+      const competence = monthDateValue($('#goalMonth')?.value || monthKey());
+      const rows = state.goals.map((goal)=>({goal,actual:actualGoalMetrics(goal.escopo==='equipe'?'Equipe':goal.usuarioNome,competence)}));
+      const totals = rows.reduce((acc,row)=>({contacts:acc.contacts+row.actual.contacts,targetContacts:acc.targetContacts+row.goal.metaContatos,renewals:acc.renewals+row.actual.renewals,targetRenewals:acc.targetRenewals+row.goal.metaRenovacoes}),{contacts:0,targetContacts:0,renewals:0,targetRenewals:0});
+      $('#goalSummary').innerHTML = [['Contatos',`${totals.contacts}/${totals.targetContacts}`,'fa-phone'],['Renovações',`${totals.renewals}/${totals.targetRenewals}`,'fa-circle-check'],['Metas cadastradas',rows.length,'fa-bullseye']].map(([label,value,icon])=>`<div class="workflow-card"><span>${label}</span><strong>${value}</strong><i class="fa-solid ${icon}"></i></div>`).join('');
+      $('#goalTableBody').innerHTML = rows.length ? rows.map(({goal,actual})=>{const overallTarget=goal.metaContatos+goal.metaRenovacoes+goal.metaPendencias;const overallActual=actual.contacts+actual.renewals+actual.resolved;return `<tr><td><strong>${escapeHTML(goal.escopo==='equipe'?'Equipe':goal.usuarioNome)}</strong><small style="display:block;color:var(--muted)">${escapeHTML(goal.usuarioEmail||goal.escopo)}</small></td><td>${progressBar(actual.contacts,goal.metaContatos)}</td><td>${progressBar(actual.renewals,goal.metaRenovacoes)}</td><td>${progressBar(actual.resolved,goal.metaPendencias)}</td><td>${progressBar(overallActual,overallTarget)}</td><td data-admin-only><button class="btn btn-secondary btn-icon" data-edit-goal="${goal.id}"><i class="fa-solid fa-pen"></i></button></td></tr>`;}).join('') : `<tr><td colspan="6">${emptyState('Nenhuma meta cadastrada','O administrador pode definir metas mensais para usuários ou para a equipe.')}</td></tr>`;
+      applyAccessRules();
+    }
+
+    function openGoalEditor(id='') {
+      const goal = state.goals.find((item)=>item.id===id) || {};
+      $('#goalForm').reset();
+      $('#goalCompetence').value = String(goal.competencia || monthDateValue($('#goalMonth')?.value || monthKey())).slice(0,7);
+      $('#goalScope').value = goal.escopo || 'usuario';
+      $('#goalUser').value = goal.usuarioId || state.operators[0]?.id || '';
+      $('#goalContacts').value = Number(goal.metaContatos || 0);
+      $('#goalRenewals').value = Number(goal.metaRenovacoes || 0);
+      $('#goalResolved').value = Number(goal.metaPendencias || 0);
+      $('#goalUser').disabled = $('#goalScope').value === 'equipe';
+      openModal('goalModalBackdrop');
+    }
+
+    async function saveGoal(event) {
+      event.preventDefault();
+      if (!ensureAdmin('salvar metas')) return;
+      const scope = $('#goalScope').value;
+      const user = state.operators.find((item)=>item.id===$('#goalUser').value);
+      try {
+        await window.remoteData.saveOperationalGoal({
+          competencia: `${$('#goalCompetence').value}-01`,
+          escopo: scope,
+          usuarioId: scope==='equipe'?null:user?.id,
+          usuarioNome: scope==='equipe'?'Equipe':user?.nome,
+          usuarioEmail: scope==='equipe'?'':user?.email,
+          metaContatos: $('#goalContacts').value,
+          metaRenovacoes: $('#goalRenewals').value,
+          metaPendencias: $('#goalResolved').value
+        });
+        closeModal('goalModalBackdrop'); await loadGoals(); toast('success','Meta salva','A meta operacional foi atualizada.');
+      } catch (error) { toast('error','Falha ao salvar meta',error.message); }
+    }
+
+    function calendarEvents() {
+      const brand = $('#calendarBrand')?.value || '';
+      const responsible = $('#calendarResponsible')?.value || '';
+      const q = normalize($('#calendarSearch')?.value || '');
+      return state.data.concedentes.map(normalizeCompany).filter((company)=>!brand||company.marca===brand).filter((company)=>!responsible||company.responsavelOperacional===responsible).filter((company)=>!q||normalize([company.nomeFantasia,company.razaoSocial,company.cnpj,company.cidade,company.proximaAcao].join(' ')).includes(q)).flatMap((company)=>{
+        const events=[];
+        if (company.proximaData) events.push({date:company.proximaData,type:'contact',company,title:company.proximaAcao||'Próximo contato'});
+        if (company.fimVigencia) events.push({date:company.fimVigencia,type:'deadline',company,title:'Fim da vigência'});
+        return events;
+      });
+    }
+
+    function renderCalendar() {
+      const grid = $('#calendarGrid'); if (!grid) return;
+      const cursor = new Date(state.calendarCursor.getFullYear(),state.calendarCursor.getMonth(),1);
+      $('#calendarTitle').textContent = cursor.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^./,(char)=>char.toUpperCase());
+      const firstWeekday = (cursor.getDay()+6)%7;
+      const start = new Date(cursor); start.setDate(1-firstWeekday);
+      const events = calendarEvents();
+      const headers = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].map((day)=>`<div class="calendar-weekday">${day}</div>`).join('');
+      const days = [];
+      for (let index=0;index<42;index+=1) {
+        const date = new Date(start); date.setDate(start.getDate()+index);
+        const iso = date.toISOString().slice(0,10);
+        const dayEvents = events.filter((event)=>event.date===iso);
+        days.push(`<div class="calendar-day ${date.getMonth()===cursor.getMonth()?'':'outside'}"><div class="calendar-day-number">${date.getDate()}</div>${dayEvents.slice(0,5).map((event)=>`<button class="calendar-event ${event.type==='deadline'?'deadline':''}" data-calendar-company="${event.company.id}" title="${escapeHTML(event.title)}">${event.type==='deadline'?'Vigência':'Contato'} • ${escapeHTML(event.company.nomeFantasia||event.company.razaoSocial)}</button>`).join('')}${dayEvents.length>5?`<small>+${dayEvents.length-5} evento(s)</small>`:''}</div>`);
+      }
+      grid.innerHTML = headers + days.join('');
+    }
+
+    function collectExceptions() {
+      const rows=[];
+      const today=todayISO();
+      state.data.concedentes.map(normalizeCompany).forEach((company)=>{
+        const name=company.nomeFantasia||company.razaoSocial;
+        if (company.proximaData && company.proximaData < today) rows.push({type:'prazo',severity:'high',company,message:`Próximo contato atrasado desde ${formatDate(company.proximaData)}.`});
+        const idle=inactivityInfo(company); if (idle.days===null||idle.days>10) rows.push({type:'inatividade',severity:idle.days===null?'medium':'high',company,message:idle.label});
+        if (!company.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(company.email)) rows.push({type:'cadastro',severity:'medium',company,message:'E-mail ausente ou inválido.'});
+        if (!company.telefone || onlyDigits(company.telefone).length<10) rows.push({type:'cadastro',severity:'low',company,message:'Telefone ausente ou incompleto.'});
+        if (!company.responsavelAcompanhamento) rows.push({type:'cadastro',severity:'medium',company,message:'Acompanhamento sem responsável.'});
+        if (['inapta','baixada','suspensa','nula'].some((key)=>normalize(company.situacaoCadastral).includes(key))) rows.push({type:'situacao',severity:'high',company,message:`Situação cadastral: ${company.situacaoCadastral}.`});
+      });
+      (state.activeLocks||[]).forEach((lock)=>{const company=state.data.concedentes.find((item)=>item.id===lock.companyId);if(company)rows.push({type:'edicao',severity:'low',company,message:`Em edição por ${lock.usuarioNome||lock.usuarioEmail||'outro usuário'} até ${new Date(lock.expiresAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}.`});});
+      const automatic=(state.exportHistory||[]).filter((item)=>item.origem==='automatica');
+      if (isAdmin() && !automatic.length) rows.push({type:'backup',severity:'high',company:null,message:'Nenhum backup automático foi localizado no histórico.'});
+      return rows;
+    }
+
+    async function refreshExceptionsData() {
+      try { state.activeLocks = await window.remoteData.listActiveEditLocks(); } catch (error) { state.activeLocks=[]; }
+      if (isAdmin()) { try { await loadExportHistory(); } catch {} }
+      renderExceptions();
+    }
+
+    function renderExceptions() {
+      if (!$('#exceptionTableBody')) return;
+      const type=$('#exceptionType')?.value||''; const brand=$('#exceptionBrand')?.value||''; const q=normalize($('#exceptionSearch')?.value||'');
+      const all=collectExceptions();
+      const rows=all.filter((item)=>!type||item.type===type).filter((item)=>!brand||item.company?.marca===brand).filter((item)=>!q||normalize([item.company?.nomeFantasia,item.company?.razaoSocial,item.company?.cnpj,item.company?.responsavelAcompanhamento,item.message].join(' ')).includes(q));
+      const metrics=[['Total',all.length,'fa-triangle-exclamation'],['Críticas',all.filter((item)=>item.severity==='high').length,'fa-circle-exclamation'],['Prazos',all.filter((item)=>item.type==='prazo').length,'fa-clock'],['Cadastros',all.filter((item)=>item.type==='cadastro').length,'fa-clipboard-check']];
+      $('#exceptionMetrics').innerHTML=metrics.map(([label,value,icon])=>`<div class="workflow-card"><span>${label}</span><strong>${value}</strong><i class="fa-solid ${icon}"></i></div>`).join('');
+      $('#exceptionTableBody').innerHTML=rows.length?rows.map((item)=>`<tr><td class="exception-${item.severity}">${item.severity==='high'?'Crítica':item.severity==='medium'?'Atenção':'Informativa'}</td><td>${item.company?`<strong>${escapeHTML(item.company.nomeFantasia||item.company.razaoSocial)}</strong><small style="display:block;color:var(--muted)">${escapeHTML(item.company.cnpj||'')}</small>`:'Sistema'}</td><td>${escapeHTML(item.company?.marca||'—')}</td><td>${escapeHTML(item.message)}</td><td>${item.company?`<button class="btn btn-secondary btn-sm" data-exception-company="${item.company.id}">Abrir</button>`:isAdmin()?'<button class="btn btn-secondary btn-sm" data-panel-target="configuracoes">Configurações</button>':'—'}</td></tr>`).join(''):`<tr><td colspan="5">${emptyState('Nenhuma exceção encontrada','Os filtros atuais não possuem ocorrências pendentes.')}</td></tr>`;
+    }
+
+    async function renderMentionsWhenVisible() { if ($('#panel-notificacoes')?.classList.contains('active')) await loadMyMentions(); }
+
+    async function loadAutomationSuiteData({silent=true}={}) {
+      if (!window.currentUser?.id) return;
+      await Promise.allSettled([loadFlowRules({silent}),loadOperators(),loadMaintenanceConfiguration(),loadUndoOperations(),loadMyMentions()]);
+      if ($('#goalMonth') && !$('#goalMonth').value) $('#goalMonth').value=monthKey();
+      if ($('#panel-metas')?.classList.contains('active')) await loadGoals();
+      renderMaintenanceMode();
+      evaluateEscalationRules().catch((error)=>console.warn('[Escalonamento]',error));
+      state.supplementalLoadedAt=Date.now();
+    }
+
+    const baseSwitchPanelV880 = switchPanel;
+    switchPanel = function(name) {
+      const custom={calendario:['Calendário','Acompanhamentos e vencimentos organizados por data.'],excecoes:['Exceções','Ocorrências que precisam de atenção.'],metas:['Metas','Progresso mensal por usuário e equipe.']};
+      if (!custom[name]) {
+        baseSwitchPanelV880(name);
+        if (name==='notificacoes') renderMentionsWhenVisible();
+        return;
+      }
+      $$('.panel').forEach((panel)=>panel.classList.remove('active'));
+      $$('.nav-item').forEach((item)=>item.classList.toggle('active',item.dataset.panel===name));
+      $('#panel-'+name)?.classList.add('active');
+      $('#pageTitle').textContent=custom[name][0]; $('#pageSubtitle').textContent=custom[name][1];
+      if(window.innerWidth<=900)$('#sidebar').classList.remove('mobile-open');
+      if(name==='calendario')renderCalendar();
+      if(name==='excecoes')refreshExceptionsData();
+      if(name==='metas'){if(!$('#goalMonth').value)$('#goalMonth').value=monthKey();loadGoals();}
+    };
+
+    const baseApplyAccessRulesV880 = applyAccessRules;
+    applyAccessRules = function() {
+      baseApplyAccessRulesV880();
+      runOptionalFeature('modo de manutenção', renderMaintenanceMode);
+    };
+
+    const baseRenderAllV880 = renderAll;
+    renderAll = function() {
+      baseRenderAllV880();
+      runOptionalFeature('recursos complementares da V8.8', () => {
+        renderMaintenanceMode();
+        const active=$('.panel.active')?.id.replace('panel-','')||'';
+        if(active==='calendario')renderCalendar();
+        if(active==='excecoes')renderExceptions();
+        if(active==='metas')renderGoals();
+        if(active==='notificacoes')renderMyMentions();
+        renderFlowRulesSettings();
+        updateTagFilterOptions();
+      });
+    };
+
+    const baseMarkRenewedV880 = markRenewed;
+    markRenewed = function(id) { if (!ensureOperationalWrite('alterar a situação')) return; return baseMarkRenewedV880(id); };
+    const baseClaimQueueCompanyV880 = claimQueueCompany;
+    claimQueueCompany = async function(id) { if (!ensureOperationalWrite('atribuir responsáveis')) return; return baseClaimQueueCompanyV880(id); };
+
+    const baseBuildBackupPayloadV880 = buildBackupPayload;
+    buildBackupPayload = function() {
+      const payload=baseBuildBackupPayloadV880();
+      payload.version=5;
+      payload.regrasFluxo=state.flowRules;
+      payload.metasOperacionais=state.goals;
+      payload.manutencao=state.maintenance;
+      payload.etiquetas=true;
+      return payload;
+    };
+
+    backupJSON = async function() {
+      if(!ensureAdmin('criar backups'))return;
+      try {
+        const payload=buildBackupPayload();
+        if(window.remoteData?.exportSupplementalData){Object.assign(payload,await window.remoteData.exportSupplementalData());}
+        const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+        const filename=`backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/','-')}.json`;
+        const downloaded=await saveBlobToDevice(blob,filename,{usePicker:true});
+        if(!downloaded)return;
+        toast('success','Backup JSON criado','Cadastros, comentários, regras, metas e configurações foram incluídos.');
+        saveExportHistory(blob,filename,'backup-json',payload.totalConcedentes).catch(()=>{});
+      } catch(error){toast('error','Falha ao criar backup',error.message||'Não foi possível gerar o arquivo.');}
+    };
+
+    const baseRestoreJSONV880 = restoreJSON;
+    restoreJSON = function(file) {
+      if(!ensureAdmin('restaurar backups'))return;
+      const reader=new FileReader();
+      reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed||!Array.isArray(parsed.concedentes))throw new Error('Estrutura inválida');confirmAction('Restaurar backup','Os dados operacionais serão substituídos pelo conteúdo do arquivo. Deseja continuar?',async()=>{try{const result=window.remoteData.replaceAllWorkflow?await window.remoteData.replaceAllWorkflow(parsed.concedentes.map(normalizeCompany),parsed.modelosEmail||[]):await window.remoteData.replaceAll(parsed.concedentes.map(normalizeCompany));let supplementalOk=true;if(window.remoteData.restoreSupplementalData){try{await window.remoteData.restoreSupplementalData(parsed);}catch(extraError){supplementalOk=false;console.warn('[Restauração complementar]',extraError);}}await loadRemoteData({silent:true});await loadAutomationSuiteData({silent:true});toast(supplementalOk?'success':'warning','Backup restaurado',supplementalOk?`${result.inserted} concedente(s) e recursos complementares restaurados.`:`${result.inserted} concedente(s) restaurada(s). Alguns recursos complementares não puderam ser importados.`);}catch(error){toast('error','Falha na restauração',error.message);}});}catch(error){toast('error','Backup inválido','O arquivo não possui uma estrutura compatível.');}};reader.readAsText(file);
+    };
+
+    function bindAutomationSuiteEvents() {
+      $('#globalSearchButton')?.addEventListener('click',()=>{openModal('globalSearchBackdrop');setTimeout(()=>$('#globalSearchInput')?.focus(),80);});
+      $('#globalSearchInput')?.addEventListener('input',()=>{clearTimeout(state.globalSearchTimer);state.globalSearchTimer=setTimeout(runGlobalSearch,280);});
+      $('#flowRuleForm')?.addEventListener('submit',saveFlowRuleEditor);
+      $('#newFlowRule')?.addEventListener('click',()=>openFlowRuleEditor());
+      $('#saveMaintenance')?.addEventListener('click',saveMaintenanceConfiguration);
+      $('#internalCommentForm')?.addEventListener('submit',saveInternalComment);
+      $('#confirmBulkPreview')?.addEventListener('click',()=>{const pending=state.pendingBulkPreview;if(pending)performBulkActionsV880(pending.ids,pending.payload);});
+      $('#bulkDistribute')?.addEventListener('click',openDistribution);
+      $('#distributionForm')?.addEventListener('submit',submitDistribution);
+      $('#undoOperationButton')?.addEventListener('click',undoLatestOperation);
+      $('#dismissUndoOperation')?.addEventListener('click',()=>$('#undoOperationBar')?.classList.add('hidden'));
+      $('#newGoalButton')?.addEventListener('click',()=>openGoalEditor());
+      $('#goalForm')?.addEventListener('submit',saveGoal);
+      $('#goalScope')?.addEventListener('change',()=>{$('#goalUser').disabled=$('#goalScope').value==='equipe';});
+      $('#goalMonth')?.addEventListener('change',loadGoals);
+      $('#calendarToday')?.addEventListener('click',()=>{state.calendarCursor=new Date(new Date().getFullYear(),new Date().getMonth(),1);renderCalendar();});
+      $('#calendarPrevious')?.addEventListener('click',()=>{state.calendarCursor=new Date(state.calendarCursor.getFullYear(),state.calendarCursor.getMonth()-1,1);renderCalendar();});
+      $('#calendarNext')?.addEventListener('click',()=>{state.calendarCursor=new Date(state.calendarCursor.getFullYear(),state.calendarCursor.getMonth()+1,1);renderCalendar();});
+      ['calendarBrand','calendarResponsible'].forEach((id)=>$('#'+id)?.addEventListener('change',renderCalendar));
+      $('#calendarSearch')?.addEventListener('input',renderCalendar);
+      ['exceptionType','exceptionBrand'].forEach((id)=>$('#'+id)?.addEventListener('change',renderExceptions));
+      $('#exceptionSearch')?.addEventListener('input',renderExceptions);
+      $('#refreshExceptions')?.addEventListener('click',refreshExceptionsData);
+      $('#refreshMentions')?.addEventListener('click',loadMyMentions);
+      ['filterEtiqueta','filterInatividade'].forEach((id)=>$('#'+id)?.addEventListener('change',()=>{state.page=1;renderCompanies();}));
+      document.addEventListener('keydown',(event)=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openModal('globalSearchBackdrop');setTimeout(()=>$('#globalSearchInput')?.focus(),80);}});
+      document.addEventListener('submit',(event)=>{if(event.target.id==='internalCommentForm')saveInternalComment(event);});
+      document.addEventListener('click',(event)=>{
+        const global=event.target.closest?.('[data-global-company]');if(global){closeModal('globalSearchBackdrop');viewCompany(global.dataset.globalCompany);return;}
+        const editRule=event.target.closest?.('[data-edit-flow-rule]');if(editRule){openFlowRuleEditor(editRule.dataset.editFlowRule);return;}
+        const deleteRule=event.target.closest?.('[data-delete-flow-rule]');if(deleteRule){const rule=state.flowRules.find((item)=>item.id===deleteRule.dataset.deleteFlowRule);confirmAction('Excluir regra',`Deseja excluir “${rule?.nome||'esta regra'}”?`,async()=>{try{await window.remoteData.deleteFlowRule(deleteRule.dataset.deleteFlowRule);state.flowRules=state.flowRules.filter((item)=>item.id!==deleteRule.dataset.deleteFlowRule);renderFlowRulesSettings();}catch(error){toast('error','Falha ao excluir',error.message);}});return;}
+        const deleteComment=event.target.closest?.('[data-delete-comment]');if(deleteComment){confirmAction('Excluir comentário','Deseja remover este comentário interno?',async()=>{try{await window.remoteData.deleteInternalComment(deleteComment.dataset.deleteComment);await renderCompanyComments(deleteComment.dataset.companyId);}catch(error){toast('error','Falha ao excluir',error.message);}});return;}
+        const read=event.target.closest?.('[data-read-mention]');if(read){window.remoteData.markInternalCommentRead(read.dataset.readMention).then(loadMyMentions);return;}
+        const mentionCompany=event.target.closest?.('[data-open-mention-company]');if(mentionCompany){viewCompany(mentionCompany.dataset.openMentionCompany);return;}
+        const calendar=event.target.closest?.('[data-calendar-company]');if(calendar){viewCompany(calendar.dataset.calendarCompany);return;}
+        const exception=event.target.closest?.('[data-exception-company]');if(exception){viewCompany(exception.dataset.exceptionCompany);return;}
+        const panelTarget=event.target.closest?.('[data-panel-target]');if(panelTarget){switchPanel(panelTarget.dataset.panelTarget);return;}
+        const editGoal=event.target.closest?.('[data-edit-goal]');if(editGoal){openGoalEditor(editGoal.dataset.editGoal);return;}
+      });
+      document.addEventListener('click',(event)=>{
+        if(!maintenanceBlocksWrites())return;
+        const writeTarget=event.target.closest?.('.action-edit,.action-delete,.action-contact,.action-renew,[data-queue-contact],[data-queue-email],#bulkOpenActions,#bulkDistribute,#newCompanyBtn,#openCompanyModal,#newContactBtn');
+        if(writeTarget){event.preventDefault();event.stopImmediatePropagation();ensureOperationalWrite('realizar alterações');}
+      },true);
+      document.addEventListener('auth:ready',()=>loadAutomationSuiteData({silent:true}).catch((error)=>console.warn('[Automação complementar]',error)));
+      document.addEventListener('auth:signed-out',()=>{state.flowRules=[];state.operators=[];state.myMentions=[];state.goals=[];state.undoOperations=[];state.maintenance={ativo:false,mensagem:'',inicioEm:'',fimEm:''};renderMaintenanceMode();});
+    }
 
     window.conveniosApp = Object.freeze({
       getCompanies: () => state.data.concedentes.map(normalizeCompany),
@@ -3554,7 +5515,23 @@
     });
 
     function init() {
-      loadData();setupStaticOptions();ensureWorkflowEnhancementsUI();ensureOutlookMessageUI();bindEvents();bindWorkflowEnhancementEvents();applyTheme();renderAll();updateMigrationSummary();applyAccessRules();
+      loadData();
+      setupStaticOptions();
+      ensureWorkflowEnhancementsUI();
+      ensureOutlookMessageUI();
+      ensureAdvancedManagementUI();
+      ensureLegalNatureClassificationUI();
+      runOptionalFeature('interface de automação e colaboração', ensureAutomationSuiteUI);
+      bindEvents();
+      bindWorkflowEnhancementEvents();
+      bindAdvancedManagementEvents();
+      runOptionalFeature('eventos de automação e colaboração', bindAutomationSuiteEvents);
+      $('#naturezaJuridica')?.addEventListener('input', updateLegalNatureClassification);
+      $('#naturezaJuridica')?.addEventListener('change', updateLegalNatureClassification);
+      applyTheme();
+      renderAll();
+      updateMigrationSummary();
+      applyAccessRules();
 
       document.addEventListener('click',(event)=>{
         const restricted=event.target.closest?.('[data-admin-only], .action-delete');
@@ -3573,7 +5550,7 @@
         startAutomaticBackupScheduler();
       });
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&window.currentUser?.id){loadRemoteData({silent:true});checkAutomaticBackupSchedule();}});
-      if(window.currentUser?.id){loadRemoteData();startAutomaticBackupScheduler();}
+      if(window.currentUser?.id){loadRemoteData();loadAutomationSuiteData({silent:true});startAutomaticBackupScheduler();}
     }
     init();
   })();

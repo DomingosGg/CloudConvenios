@@ -93,6 +93,18 @@
     return cleanText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  function classifyLegalNature(value = '') {
+    const raw = cleanText(value, 300);
+    if (!raw) return 'Não identificado';
+    const digits = raw.replace(/\D/g, '').slice(0, 4);
+    if (/^1\d{3}$/.test(digits) || ['2011','2038'].includes(digits)) return 'Público';
+    const text = normalizeTextForCompare(raw);
+    const terms = ['orgao publico','autarquia','fundacao publica','fundo publico','empresa publica','sociedade de economia mista','consorcio publico','estado ou distrito federal','municipio','uniao','comissao polinacional'];
+    if (terms.some((term) => text.includes(term))) return 'Público';
+    if (digits.startsWith('5')) return 'Não identificado';
+    return 'Privado';
+  }
+
   function normalizeBrasilApi(raw) {
     return {
       cnpj: normalizeCnpj(raw.cnpj),
@@ -101,6 +113,7 @@
       dataAbertura: normalizeDate(raw.data_inicio_atividade),
       situacaoCadastral: firstText(raw.descricao_situacao_cadastral, raw.situacao_cadastral),
       naturezaJuridica: formatNature(firstText(raw.codigo_natureza_juridica, raw.natureza_juridica), raw.descricao_natureza_juridica),
+      tipoNatureza: classifyLegalNature(formatNature(firstText(raw.codigo_natureza_juridica, raw.natureza_juridica), raw.descricao_natureza_juridica)),
       cnaePrincipal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
       email: normalizeEmail(raw.email),
       telefone: normalizePhone([raw.ddd_telefone_1, raw.ddd_telefone_2]),
@@ -133,6 +146,10 @@
           typeof data.legalNature === 'string' ? data.legalNature : ''
         )
       ),
+      tipoNatureza: classifyLegalNature(formatNature(
+        firstText(data.naturezaJuridica?.codigo, data.legalNature?.code, data.codigoNaturezaJuridica),
+        firstText(data.naturezaJuridica?.descricao, data.legalNature?.description, typeof data.naturezaJuridica === 'string' ? data.naturezaJuridica : '', typeof data.legalNature === 'string' ? data.legalNature : '')
+      )),
       cnaePrincipal: formatCnae(
         firstText(data.cnaePrincipal?.codigo, data.cnaePrincipal?.code, data.cnaeCodigo, data.mainActivity?.code),
         firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal?.description, data.mainActivity?.text, data.mainActivity)
@@ -186,6 +203,7 @@
         data.descricao_natureza_juridica,
         data.legalNature
       ),
+      tipoNatureza: firstText(data.tipoNatureza, data.tipo_natureza) || classifyLegalNature(firstText(data.naturezaJuridica, data.natureza_juridica, data.descricao_natureza_juridica, data.legalNature)),
       cnaePrincipal: firstText(
         data.cnaePrincipal,
         formatCnae(
@@ -259,7 +277,7 @@
   function mergeCompanyData(records) {
     const fields = [
       'cnpj', 'razaoSocial', 'nomeFantasia', 'dataAbertura', 'situacaoCadastral',
-      'naturezaJuridica', 'cnaePrincipal', 'email', 'telefone', 'cep',
+      'naturezaJuridica', 'tipoNatureza', 'cnaePrincipal', 'email', 'telefone', 'cep',
       'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado'
     ];
     const merged = Object.fromEntries(fields.map((field) => [field, '']));
@@ -277,6 +295,7 @@
     });
 
     if (!merged.nomeFantasia) merged.nomeFantasia = merged.razaoSocial;
+    merged.tipoNatureza = merged.tipoNatureza || classifyLegalNature(merged.naturezaJuridica);
     merged.fontes = sources;
     merged.consultadoEm = new Date().toISOString();
     return merged;

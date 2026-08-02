@@ -3,9 +3,22 @@
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cache-Control: no-store, max-age=0, must-revalidate
+
+/*.html
+  Cache-Control: no-store, max-age=0, must-revalidate
 
 /index.html
-  Cache-Control: no-cache
+  Cache-Control: no-store, max-age=0, must-revalidate
 
 /js/*
-  Cache-Control: no-cache
+  Cache-Control: no-store, max-age=0, must-revalidate
+
+/css/*
+  Cache-Control: no-store, max-age=0, must-revalidate
+
+/VERSAO.txt
+  Cache-Control: no-store, max-age=0, must-revalidate
+
+/build-info.json
+  Cache-Control: no-store, max-age=0, must-revalidate

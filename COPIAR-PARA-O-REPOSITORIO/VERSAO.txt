@@ -1,1 +1,0 @@
-﻿8.4.5 - Importação somente com CNPJ: consulta antes da validação, preenchimento automático e Polo padrão

@@ -1,4 +1,4 @@
-const VERSION = 'cloudflare-pages-cnpj-2.0.0-v849';
+const VERSION = 'cloudflare-pages-cnpj-2.1.0-v881';
 
 const BASE_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -39,6 +39,22 @@ function clean(value, max = 300) {
 
 function onlyCnpjChars(value) {
   return clean(value, 40).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeText(value) {
+  return clean(value, 300).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function classifyLegalNature(value = '') {
+  const raw = clean(value, 300);
+  if (!raw) return 'Não identificado';
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (/^1\d{3}$/.test(digits) || ['2011','2038'].includes(digits)) return 'Público';
+  const text = normalizeText(raw);
+  const terms = ['orgao publico','autarquia','fundacao publica','fundo publico','empresa publica','sociedade de economia mista','consorcio publico','estado ou distrito federal','municipio','uniao','comissao polinacional'];
+  if (terms.some((term) => text.includes(term))) return 'Público';
+  if (digits.startsWith('5')) return 'Não identificado';
+  return 'Privado';
 }
 
 function first(...values) {
@@ -539,6 +555,8 @@ function toClientData(data) {
     dataAbertura: clean(data.data_abertura),
     situacaoCadastral: clean(data.situacao_cadastral),
     naturezaJuridica: clean(data.natureza_juridica),
+    tipoNatureza: classifyLegalNature(data.natureza_juridica),
+    tipo_natureza: classifyLegalNature(data.natureza_juridica),
     cnaePrincipal: clean(data.cnae_principal),
     email: normalizeEmail(data.email),
     telefone: normalizePhone(data.telefone),

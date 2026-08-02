@@ -1,11 +1,9 @@
-﻿{
-    "features":  {
-                     "preserva_usuarios_permissoes_configuracoes_auditoria":  true,
-                     "importacao_cnae_automatico":  true,
-                     "dados_demonstracao_removidos":  true,
-                     "importacao_completa_campos_vazios_por_cnpj":  true,
-                     "exclusao_total_com_senha_administrador":  true
-                 },
-    "version":  "8.4.4",
-    "release":  "security-import-enhancements"
+{
+  "platform": "Cloudflare Pages",
+  "runtime": "Pages Functions",
+  "branch": "main",
+  "version": "8.9.1",
+  "build": "8.9.1-reviewed-root-stability",
+  "supabase_project": "uvsilamqohytjuzdjrok",
+  "status": "production-ready"
 }

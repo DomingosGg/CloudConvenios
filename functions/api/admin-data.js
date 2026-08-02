@@ -1,4 +1,4 @@
-const FUNCTION_VERSION = 'cloudflare-pages-1.0.0-admin-password-v844';
+const FUNCTION_VERSION = 'cloudflare-pages-8.9.1-admin-data';
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 
 const BASE_HEADERS = Object.freeze({

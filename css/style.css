@@ -1406,3 +1406,17 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
+
+
+/* V8.9.1 — campos consolidados, raiz sincronizada e cache corrigido */
+.brand-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.brand-choice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;transition:.2s}
+.brand-choice:hover{border-color:var(--primary);transform:translateY(-1px)}
+.brand-choice:has(input:checked){border-color:#FFC629;box-shadow:0 0 0 3px rgba(255,198,41,.18)}
+.brand-choice input{accent-color:#1D1934;width:18px;height:18px}
+.brand-choice span{display:grid;gap:2px}.brand-choice small{color:var(--muted);font-size:11px}
+#marcaConvenioGroup.invalid{outline:2px solid var(--danger);outline-offset:4px;border-radius:12px}
+.field-hint-inline{font-size:11px;color:var(--muted);font-weight:400}
+#companiesTable th,#companiesTable td{white-space:nowrap}
+#companiesTable th[data-sort="naturezaJuridica"],#companiesTable td:nth-child(8),#companiesTable th[data-sort="cnaePrincipal"],#companiesTable td:nth-child(10){min-width:230px;max-width:320px}
+@media(max-width:700px){.brand-choice-grid{grid-template-columns:1fr}}

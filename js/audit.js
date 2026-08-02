@@ -20,11 +20,12 @@
 
   const fieldLabels = Object.freeze({
     cnpj: 'CNPJ', razao_social: 'Razão Social', nome_fantasia: 'Nome Fantasia', data_abertura: 'Data de abertura',
-    situacao_cadastral: 'Situação cadastral', natureza_juridica: 'Natureza jurídica', cnae_principal: 'CNAE principal',
+    situacao_cadastral: 'Situação cadastral', natureza_juridica: 'Natureza jurídica', tipo_natureza: 'Público/Privado', cnae_principal: 'CNAE principal',
     logradouro: 'Logradouro', numero: 'Número', complemento: 'Complemento', bairro: 'Bairro', fonte_cnpj: 'Fonte do CNPJ',
     consultado_em: 'Data da consulta do CNPJ', inicio_vigencia: 'Início da Vigência', fim_vigencia: 'Fim da Vigência',
     data_cadastro: 'Data do Cadastro', estado: 'Estado', cidade: 'Cidade', cep: 'CEP', email: 'E-mail', telefone: 'Telefone',
-    polo: 'Polo', marca: 'Marca do convênio', responsavel_acompanhamento: 'Responsável pelo acompanhamento', prioridade: 'Prioridade', situacao: 'Situação', formas_contato: 'Formas de Contato', observacoes: 'Observações',
+    polo: 'Polo', marca: 'Marca do convênio', responsavel_acompanhamento: 'Responsável pelo acompanhamento', prioridade: 'Prioridade', etiquetas: 'Etiquetas', situacao: 'Situação', formas_contato: 'Formas de Contato', observacoes: 'Observações',
+    evento: 'Evento automático', situacao_origem: 'Situação de origem', situacao_destino: 'Situação de destino', dias_uteis: 'Dias úteis', dias_atraso: 'Dias de atraso', prioridade_destino: 'Prioridade de destino', texto: 'Comentário', mencoes: 'Menções', lido_por: 'Lido por', competencia: 'Competência', escopo: 'Escopo', meta_contatos: 'Meta de contatos', meta_renovacoes: 'Meta de renovações', meta_pendencias: 'Meta de pendências', chave: 'Configuração', valor: 'Valor', expira_em: 'Expiração', desfeita_em: 'Desfeita em', descricao: 'Descrição', payload: 'Conteúdo da operação',
     demonstracao: 'Registro de demonstração', concedente_id: 'Concedente', data_contato: 'Data do Contato', horario: 'Horário',
     responsavel: 'Responsável', forma_contato: 'Forma de Contato', pessoa_contatada: 'Pessoa Contatada',
     resultado_contato: 'Resultado do Contato', proxima_acao: 'Próxima Ação', proximo_contato: 'Próximo Contato',
@@ -77,7 +78,7 @@
     return { label: 'Edição', className: 'audit-action-update', icon: 'fa-pen' };
   }
   function entityLabel(table) {
-    return ({ concedentes: 'Concedente', contatos: 'Contato', usuarios: 'Usuário', modelos_email: 'Modelo de e-mail', comunicacoes_email: 'Comunicação por e-mail', filtros_salvos: 'Filtro salvo', bloqueios_edicao: 'Bloqueio de edição', auditoria: 'Comprovante técnico' })[table] || table || 'Registro';
+    return ({ concedentes: 'Concedente', contatos: 'Contato', usuarios: 'Usuário', modelos_email: 'Modelo de e-mail', comunicacoes_email: 'Comunicação por e-mail', filtros_salvos: 'Filtro salvo', bloqueios_edicao: 'Bloqueio de edição', regras_fluxo: 'Regra automática', comentarios_internos: 'Comentário interno', metas_operacionais: 'Meta operacional', configuracoes_sistema: 'Configuração do sistema', operacoes_reversiveis: 'Operação reversível', auditoria: 'Comprovante técnico' })[table] || table || 'Registro';
   }
   function userLabel(record) { return record.usuario_nome || record.usuario_email || 'Sistema'; }
   function getChangedFields(record) {

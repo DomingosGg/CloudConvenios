@@ -1,9 +1,0 @@
-VALIDAÇÃO TÉCNICA V8.2
-
-- users-admin valida tokens ES256/RS256 diretamente no JWKS do Supabase.
-- Não depende de /auth/v1/user para tokens assimétricos.
-- Reconsulta o JWKS quando o kid ainda não estiver no cache.
-- Mantém compatibilidade com HS256 legado.
-- A resposta de erro inclui código técnico.
-- A tela de usuários renova a sessão uma vez, sem encerrar a sessão principal.
-- Versão esperada em /api/users-admin: cloudflare-pages-1.4.0-jwks-es256.

@@ -263,6 +263,7 @@ function companyToBackup(item, contacts = []) {
     dataAbertura: item.data_abertura || '',
     situacaoCadastral: item.situacao_cadastral || '',
     naturezaJuridica: item.natureza_juridica || '',
+    tipoNatureza: item.tipo_natureza || '',
     cnaePrincipal: formatCnaeValue(item.cnae_principal),
     logradouro: item.logradouro || '',
     numero: item.numero || '',
@@ -281,6 +282,7 @@ function companyToBackup(item, contacts = []) {
     polo: item.polo || '',
     responsavelAcompanhamento: item.responsavel_acompanhamento || '',
     prioridade: item.prioridade || 'Média',
+    etiquetas: Array.isArray(item.etiquetas) ? item.etiquetas : [],
     situacao: item.situacao || 'Não contatado',
     formasContato: Array.isArray(item.formas_contato) ? item.formas_contato : [],
     observacoes: item.observacoes || '',
@@ -348,11 +350,19 @@ async function automaticExport(request, cfg, caller = null) {
     }
   }
 
-  const [companies, contacts, communications, templates] = await Promise.all([
+  const [
+    companies, contacts, communications, templates,
+    flowRules, comments, goals, systemSettings, savedFilters
+  ] = await Promise.all([
     queryAll(cfg, 'concedentes', '*', 'razao_social.asc'),
     queryAll(cfg, 'contatos', '*', 'data_contato.desc'),
     queryAll(cfg, 'comunicacoes_email', '*', 'preparado_em.desc').catch(() => []),
-    queryAll(cfg, 'modelos_email', '*', 'situacao.asc').catch(() => [])
+    queryAll(cfg, 'modelos_email', '*', 'situacao.asc').catch(() => []),
+    queryAll(cfg, 'regras_fluxo', '*', 'nome.asc').catch(() => []),
+    queryAll(cfg, 'comentarios_internos', '*', 'criado_em.desc').catch(() => []),
+    queryAll(cfg, 'metas_operacionais', '*', 'competencia.desc').catch(() => []),
+    queryAll(cfg, 'configuracoes_sistema', '*', 'chave.asc').catch(() => []),
+    queryAll(cfg, 'filtros_salvos', '*', 'nome.asc').catch(() => [])
   ]);
 
   const contactsByCompany = new Map();
@@ -391,10 +401,10 @@ async function automaticExport(request, cfg, caller = null) {
 
   const companyRows = [[
     'ID','CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral',
-    'Natureza Jurídica','CNAE Principal (código e descrição)','Início da Vigência',
+    'Natureza Jurídica','Público/Privado','CNAE Principal (código e descrição)','Início da Vigência',
     'Fim da Vigência','Dias restantes','Data do Cadastro','Estado','Cidade','CEP',
     'Logradouro','Número','Complemento','Bairro','E-mail','Telefone','Polo',
-    'Responsável pelo acompanhamento','Prioridade','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ',
+    'Responsável pelo acompanhamento','Prioridade','Etiquetas','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ',
     'Observações','Atualizado em'
   ], ...companies.map((item) => {
     const endDate = item.fim_vigencia ? new Date(`${item.fim_vigencia}T12:00:00Z`) : null;
@@ -403,10 +413,10 @@ async function automaticExport(request, cfg, caller = null) {
     const days = endDate ? Math.ceil((endDate - today) / 86400000) : '';
     return [
       item.id,item.cnpj,item.razao_social,item.nome_fantasia,item.marca,item.data_abertura,
-      item.situacao_cadastral,item.natureza_juridica,formatCnaeValue(item.cnae_principal),
+      item.situacao_cadastral,item.natureza_juridica,item.tipo_natureza || '',formatCnaeValue(item.cnae_principal),
       item.inicio_vigencia,item.fim_vigencia,days,item.data_cadastro,item.estado,item.cidade,
       item.cep,item.logradouro,item.numero,item.complemento,item.bairro,item.email,item.telefone,
-      item.polo,item.responsavel_acompanhamento,item.prioridade,item.situacao,(item.formas_contato || []).join(', '),item.fonte_cnpj,
+      item.polo,item.responsavel_acompanhamento,item.prioridade,(item.etiquetas || []).join(', '),item.situacao,(item.formas_contato || []).join(', '),item.fonte_cnpj,
       item.consultado_em,item.observacoes,item.atualizado_em
     ];
   })];
@@ -457,6 +467,24 @@ async function automaticExport(request, cfg, caller = null) {
     ];
   })];
 
+
+
+  const commentRows = [[
+    'ID','Concedente','CNPJ','Comentário','Usuário','E-mail do usuário','Menções','Criado em'
+  ], ...comments.map((item) => {
+    const company = companyMap.get(item.concedente_id) || {};
+    return [
+      item.id,
+      company.nome_fantasia || company.razao_social || item.concedente_id,
+      company.cnpj || '',
+      item.texto,
+      item.usuario_nome,
+      item.usuario_email,
+      (item.mencoes || []).join(', '),
+      item.criado_em
+    ];
+  })];
+
   const timeSuffix = force
     ? `_${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
     : '';
@@ -469,8 +497,14 @@ async function automaticExport(request, cfg, caller = null) {
     totalConcedentes: companies.length,
     totalContatos: contacts.length,
     totalComunicacoesEmail: communications.length,
+    totalComentariosInternos: comments.length,
     modelosEmail: templates,
     comunicacoesEmail: communications,
+    regrasFluxo: flowRules,
+    comentariosInternos: comments,
+    metasOperacionais: goals,
+    configuracoesSistema: systemSettings,
+    filtrosSalvos: savedFilters,
     concedentes: backupCompanies
   };
 
@@ -498,6 +532,12 @@ async function automaticExport(request, cfg, caller = null) {
       type: 'comunicacoes-email-automatico',
       blob: csvBlob(communicationRows),
       count: communications.length
+    },
+    {
+      filename: `comentarios_internos_${stamp}${timeSuffix}.csv`,
+      type: 'comentarios-internos-automatico',
+      blob: csvBlob(commentRows),
+      count: comments.length
     }
   ];
 
