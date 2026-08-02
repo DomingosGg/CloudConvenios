@@ -1,4 +1,4 @@
-const VERSION = 'cloudflare-pages-exports-1.1.0-v848';
+const VERSION = 'cloudflare-pages-exports-1.2.0-v849';
 const BUCKET = 'exportacoes';
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -27,6 +27,25 @@ function safeName(value, fallback = 'arquivo.xlsx') {
     .replace(/^_+|_+$/g, '')
     .slice(0, 150);
   return cleaned || fallback;
+}
+
+function normalizeMimeType(value, filename = '') {
+  const raw = String(value || '').trim().toLowerCase().split(';')[0].trim();
+  const extension = String(filename || '').toLowerCase().split('.').pop();
+
+  if (raw === 'application/json' || extension === 'json') return 'application/json';
+  if (raw === 'text/csv' || extension === 'csv') return 'text/csv';
+  if (
+    raw === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    || extension === 'xlsx'
+  ) {
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
+  if (raw === 'application/vnd.ms-excel' || extension === 'xls') {
+    return 'application/vnd.ms-excel';
+  }
+  if (raw === 'text/plain' || extension === 'txt') return 'text/plain';
+  return raw || 'application/octet-stream';
 }
 
 function serviceHeaders(cfg, extra = {}) {
@@ -123,10 +142,11 @@ function datePath(date = new Date()) {
 }
 
 async function uploadObject(cfg, path, blob, mimeType) {
+  const contentType = normalizeMimeType(mimeType || blob?.type, path);
   const response = await fetch(`${cfg.url}/storage/v1/object/${BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`, {
     method: 'POST',
     headers: serviceHeaders(cfg, {
-      'Content-Type': mimeType || 'application/octet-stream',
+      'Content-Type': contentType,
       'x-upsert': 'true'
     }),
     body: blob
@@ -170,7 +190,7 @@ async function manualUpload(request, cfg, caller) {
   const filename = safeName(request.headers.get('X-Export-Filename'));
   const type = safeName(request.headers.get('X-Export-Kind') || 'planilha', 'planilha').slice(0, 50);
   const totalRecords = Math.max(0, Number(request.headers.get('X-Export-Records') || 0) || 0);
-  const mimeType = String(request.headers.get('Content-Type') || 'application/octet-stream').slice(0, 160);
+  const mimeType = normalizeMimeType(request.headers.get('Content-Type'), filename);
   const blob = await request.blob();
   if (!blob.size) throw Object.assign(new Error('O arquivo recebido está vazio.'), { status: 400 });
   if (blob.size > 25 * 1024 * 1024) throw Object.assign(new Error('O arquivo excede o limite de 25 MB.'), { status: 413 });
@@ -198,7 +218,7 @@ function csvEscape(value) {
 }
 
 function csvBlob(rows) {
-  return new Blob(['\uFEFF' + rows.map((row) => row.map(csvEscape).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  return new Blob(['\uFEFF' + rows.map((row) => row.map(csvEscape).join(';')).join('\r\n')], { type: 'text/csv' });
 }
 
 async function queryAll(cfg, table, select, order = '') {
@@ -404,7 +424,7 @@ async function automaticExport(request, cfg, caller = null) {
     {
       filename: `backup_completo_${stamp}${timeSuffix}.json`,
       type: 'backup-json-automatico',
-      blob: new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json;charset=utf-8' }),
+      blob: new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' }),
       count: companies.length
     },
     {
@@ -424,7 +444,8 @@ async function automaticExport(request, cfg, caller = null) {
   const saved = [];
   for (const item of files) {
     const path = `automaticas/${datePath()}/${item.filename}`;
-    await uploadObject(cfg, path, item.blob, item.blob.type);
+    const mimeType = normalizeMimeType(item.blob.type, item.filename);
+    await uploadObject(cfg, path, item.blob, mimeType);
     saved.push(await insertHistory(cfg, {
       usuario_id: caller?.authUser?.id || null,
       usuario_nome: caller?.profile?.nome || caller?.profile?.email || 'Rotina automática 18h',
@@ -432,7 +453,7 @@ async function automaticExport(request, cfg, caller = null) {
       tipo: item.type,
       origem: 'automatica',
       caminho_storage: path,
-      mime_type: item.blob.type,
+      mime_type: mimeType,
       tamanho_bytes: item.blob.size,
       total_registros: item.count
     }));

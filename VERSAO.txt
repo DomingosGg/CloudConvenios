@@ -1,1 +1,1 @@
-﻿8.4.8 - Modelo corrigido, CNAE com código, Polo opcional e backups restaurados
+﻿8.4.9 - CNPJ completo, endereço automático, situação cadastral e backup corrigido

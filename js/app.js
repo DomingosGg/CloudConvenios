@@ -413,9 +413,9 @@
       $('#resultCount').textContent = `${total} ${total===1?'resultado':'resultados'}`;
       $('#paginationInfo').textContent = total ? `Exibindo ${start+1} a ${Math.min(start+state.pageSize,total)} de ${total}` : 'Nenhum registro encontrado';
       $('#companiesTableBody').innerHTML = rows.length ? rows.map(c=>`<tr>
-        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
+        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${escapeHTML(c.situacaoCadastral||'—')}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
         <td><div class="actions-cell"><button class="btn btn-secondary btn-icon action-view" data-id="${c.id}" title="Visualizar"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary btn-icon action-edit" data-id="${c.id}" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="btn btn-secondary btn-icon action-contact" data-id="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button><button class="btn btn-secondary btn-icon action-renew" data-id="${c.id}" title="Marcar como renovado"><i class="fa-solid fa-circle-check"></i></button><button class="btn btn-secondary btn-icon action-duplicate" data-id="${c.id}" title="Duplicar"><i class="fa-solid fa-copy"></i></button><button class="btn btn-danger btn-icon action-delete" data-id="${c.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button></div></td>
-      </tr>`).join('') : `<tr><td colspan="18">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="19">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
       renderPagination(pages); bindTableActions();
     }
     function renderPagination(pages) {
@@ -494,6 +494,94 @@
       return true;
     }
 
+    function setEmptyFormValueFromApi(id, value) {
+      const field = $('#' + id);
+      if (!field || String(field.value || '').trim()) return false;
+      return setFormValueFromApi(id, value);
+    }
+
+    async function fetchCepAddress(cepValue) {
+      const cep = onlyDigits(cepValue);
+      if (cep.length !== 8) throw new Error('CEP incompleto.');
+
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store'
+      });
+
+      if (!response.ok) throw new Error(`Falha na consulta do CEP (${response.status}).`);
+
+      const data = await response.json();
+      if (data?.erro) throw new Error('CEP não encontrado.');
+      return data;
+    }
+
+    async function applyCepAddressAutomatically(
+      cepValue,
+      { requestId = null, expectedCnpj = '', manual = false } = {}
+    ) {
+      const hint = $('#cepHint');
+      const cep = onlyDigits(cepValue);
+
+      if (!cep) return 0;
+      if (cep.length !== 8) {
+        if (manual && hint) hint.textContent = 'CEP incompleto. Informe 8 números.';
+        return 0;
+      }
+
+      if (hint) {
+        hint.textContent = manual
+          ? 'Consultando ViaCEP…'
+          : 'Complementando o endereço automaticamente pelo CEP…';
+      }
+
+      try {
+        const data = await fetchCepAddress(cep);
+
+        if (
+          requestId !== null
+          && (
+            requestId !== state.cnpjRequestId
+            || (expectedCnpj && cnpjKey($('#cnpj')?.value) !== expectedCnpj)
+          )
+        ) {
+          return 0;
+        }
+
+        let populated = 0;
+        [
+          ['logradouro', data.logradouro],
+          ['complemento', data.complemento],
+          ['bairro', data.bairro],
+          ['cidade', data.localidade],
+          ['estado', data.uf]
+        ].forEach(([id, value]) => {
+          if (setEmptyFormValueFromApi(id, value || '')) populated += 1;
+        });
+
+        if (hint) {
+          hint.textContent = populated
+            ? 'Endereço preenchido automaticamente. Todos os campos continuam editáveis.'
+            : 'CEP consultado. Os campos já preenchidos foram preservados.';
+        }
+
+        return populated;
+      } catch (error) {
+        console.warn('[CEP] Consulta indisponível:', error);
+        if (hint) {
+          hint.textContent = manual
+            ? 'Não foi possível consultar o CEP. Preencha o endereço manualmente.'
+            : 'O CEP foi identificado, mas o complemento automático do endereço não respondeu.';
+        }
+
+        if (manual && String(error?.message || '').includes('não encontrado')) {
+          toast('warning', 'CEP não encontrado', 'Verifique o número informado.');
+        }
+
+        return 0;
+      }
+    }
+
     async function performCnpjLookup(rawValue) {
       const key = cnpjKey(rawValue);
       if (key.length !== 14 || !window.cnpjService) return;
@@ -514,6 +602,17 @@
         });
         if (!$('#nomeFantasia')?.value.trim() && $('#razaoSocial')?.value.trim()) {
           populated += setFormValueFromApi('nomeFantasia', $('#razaoSocial').value) ? 1 : 0;
+        }
+
+        const addressIncomplete = ['logradouro', 'bairro', 'cidade', 'estado']
+          .some((id) => !String($('#' + id)?.value || '').trim());
+
+        if ($('#cep')?.value && addressIncomplete) {
+          populated += await applyCepAddressAutomatically($('#cep').value, {
+            requestId,
+            expectedCnpj: key,
+            manual: false
+          });
         }
 
         const sources = Array.isArray(data.fontes) ? data.fontes : (data.fonte ? [data.fonte] : []);
@@ -759,32 +858,7 @@
     function markRenewed(id) { const c=state.data.concedentes.find(x=>x.id===id); if(!c||!canEdit())return; confirmAction('Marcar como renovado',`Confirmar a renovação de “${c.nomeFantasia || c.razaoSocial}”?`,async()=>{try{await window.remoteData.updateCompanyStatus(id,'Renovado',c.formasContato);c.situacao='Renovado';c.updatedAt=new Date().toISOString();renderAll();applyAccessRules();toast('success','Renovação concluída','O cadastro foi marcado como Renovado.');}catch(error){toast('error','Falha ao atualizar',error.message||'Não foi possível atualizar a renovação.');}},false); }
 
     async function lookupCEP() {
-      const cep = onlyDigits($('#cep').value);
-      if (!cep) return;
-      if (cep.length !== 8) {
-        $('#cepHint').textContent = 'CEP incompleto. Informe 8 números.';
-        return;
-      }
-      $('#cepHint').textContent = 'Consultando ViaCEP…';
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-        if (!response.ok) throw new Error('Falha na consulta');
-        const data = await response.json();
-        if (data.erro) {
-          $('#cepHint').textContent = 'CEP não encontrado.';
-          toast('warning', 'CEP não encontrado', 'Verifique o número informado.');
-          return;
-        }
-        setFormValueFromApi('logradouro', data.logradouro || '');
-        setFormValueFromApi('complemento', data.complemento || '');
-        setFormValueFromApi('bairro', data.bairro || '');
-        setFormValueFromApi('cidade', data.localidade || '');
-        setFormValueFromApi('estado', data.uf || '');
-        $('#cepHint').textContent = 'Endereço preenchido pelo CEP. Todos os campos continuam editáveis.';
-      } catch (error) {
-        console.warn('[CEP] Consulta indisponível:', error);
-        $('#cepHint').textContent = 'Não foi possível consultar o CEP. Preencha o endereço manualmente.';
-      }
+      return applyCepAddressAutomatically($('#cep').value, { manual: true });
     }
 
     function refreshContactSelect() {
@@ -2162,7 +2236,7 @@
       try {
         const payload = buildBackupPayload();
         const content = JSON.stringify(payload, null, 2);
-        const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+        const blob = new Blob([content], { type: 'application/json' });
         const filename = `backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/', '-')}.json`;
         const downloaded = await saveBlobToDevice(blob, filename, { usePicker: true });
         if (!downloaded) return;

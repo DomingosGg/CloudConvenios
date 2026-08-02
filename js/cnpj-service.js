@@ -33,6 +33,32 @@
     return '';
   }
 
+  function flattenValues(value) {
+    if (Array.isArray(value)) return value.flatMap(flattenValues);
+    if (value && typeof value === 'object') return Object.values(value).flatMap(flattenValues);
+    return [value];
+  }
+
+  function normalizeEmail(value) {
+    const candidates = flattenValues(value)
+      .flatMap((item) => cleanText(item, 500).split(/[;,|\s]+/))
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    return candidates.find((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item)) || '';
+  }
+
+  function normalizePhone(value) {
+    const candidates = flattenValues(value)
+      .map((item) => cleanText(item, 120))
+      .flatMap((item) => item.split(/[;/|]+/))
+      .map((item) => item.replace(/\D/g, ''))
+      .map((digits) => digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits)
+      .filter((digits) => digits.length === 10 || digits.length === 11);
+
+    return candidates[0] || '';
+  }
+
 
   function formatCnaeCode(value) {
     const raw = cleanText(value, 40);
@@ -52,6 +78,17 @@
     return formattedCode || text;
   }
 
+  function formatNature(code, description) {
+    const normalizedCode = cleanText(code, 40);
+    const text = cleanText(description, 220);
+
+    if (text && normalizedCode && text !== normalizedCode && !text.includes(normalizedCode)) {
+      return `${normalizedCode} — ${text}`;
+    }
+
+    return text || normalizedCode;
+  }
+
   function normalizeTextForCompare(value) {
     return cleanText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
@@ -63,10 +100,10 @@
       nomeFantasia: cleanText(raw.nome_fantasia),
       dataAbertura: normalizeDate(raw.data_inicio_atividade),
       situacaoCadastral: firstText(raw.descricao_situacao_cadastral, raw.situacao_cadastral),
-      naturezaJuridica: firstText(raw.descricao_natureza_juridica, raw.natureza_juridica),
+      naturezaJuridica: formatNature(firstText(raw.codigo_natureza_juridica, raw.natureza_juridica), raw.descricao_natureza_juridica),
       cnaePrincipal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
-      email: cleanText(raw.email, 254).toLowerCase(),
-      telefone: cleanText(firstText(raw.ddd_telefone_1, raw.ddd_telefone_2)).replace(/\D/g, '').slice(0, 11),
+      email: normalizeEmail(raw.email),
+      telefone: normalizePhone([raw.ddd_telefone_1, raw.ddd_telefone_2]),
       cep: cleanText(raw.cep).replace(/\D/g, '').slice(0, 8),
       logradouro: firstText([raw.descricao_tipo_de_logradouro, raw.logradouro].filter(Boolean).join(' '), raw.logradouro),
       numero: cleanText(raw.numero, 40),
@@ -87,13 +124,21 @@
       nomeFantasia: firstText(data.nomeFantasia, data.tradeName, data.fantasia),
       dataAbertura: normalizeDate(firstText(data.dataInicioAtividades, data.dataAbertura, data.openingDate)),
       situacaoCadastral: firstText(data.situacaoCadastral, data.status),
-      naturezaJuridica: firstText(data.naturezaJuridica, data.legalNature),
+      naturezaJuridica: formatNature(
+        firstText(data.naturezaJuridica?.codigo, data.legalNature?.code, data.codigoNaturezaJuridica),
+        firstText(
+          data.naturezaJuridica?.descricao,
+          data.legalNature?.description,
+          typeof data.naturezaJuridica === 'string' ? data.naturezaJuridica : '',
+          typeof data.legalNature === 'string' ? data.legalNature : ''
+        )
+      ),
       cnaePrincipal: formatCnae(
         firstText(data.cnaePrincipal?.codigo, data.cnaePrincipal?.code, data.cnaeCodigo, data.mainActivity?.code),
         firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal?.description, data.mainActivity?.text, data.mainActivity)
       ),
-      email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
-      telefone: cleanText(firstText(data.telefone, data.phone)).replace(/\D/g, '').slice(0, 11),
+      email: normalizeEmail(firstText(data.email, data.emails, data.correioEletronico)),
+      telefone: normalizePhone(firstText(data.telefone, data.telefones, data.phone, data.phones)),
       cep: cleanText(firstText(data.cep, data.zip)).replace(/\D/g, '').slice(0, 8),
       logradouro: firstText(data.logradouro, data.endereco, data.address),
       numero: firstText(data.numero, data.number),
@@ -150,10 +195,8 @@
         data.cnae_principal,
         data.mainActivity
       ),
-      email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
-      telefone: cleanText(firstText(data.telefone, data.phone))
-        .replace(/\D/g, '')
-        .slice(0, 11),
+      email: normalizeEmail(firstText(data.email, data.emails, data.correioEletronico)),
+      telefone: normalizePhone(firstText(data.telefone, data.telefones, data.phone, data.phones)),
       cep: cleanText(firstText(data.cep, data.zip))
         .replace(/\D/g, '')
         .slice(0, 8),
@@ -213,6 +256,56 @@
     };
   }
 
+  function mergeCompanyData(records) {
+    const fields = [
+      'cnpj', 'razaoSocial', 'nomeFantasia', 'dataAbertura', 'situacaoCadastral',
+      'naturezaJuridica', 'cnaePrincipal', 'email', 'telefone', 'cep',
+      'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado'
+    ];
+    const merged = Object.fromEntries(fields.map((field) => [field, '']));
+    const sources = [];
+
+    records.forEach((record) => {
+      if (!record) return;
+      fields.forEach((field) => {
+        if (!merged[field] && cleanText(record[field])) merged[field] = record[field];
+      });
+      (record.fontes || []).forEach((source) => {
+        const text = cleanText(source);
+        if (text && !sources.includes(text)) sources.push(text);
+      });
+    });
+
+    if (!merged.nomeFantasia) merged.nomeFantasia = merged.razaoSocial;
+    merged.fontes = sources;
+    merged.consultadoEm = new Date().toISOString();
+    return merged;
+  }
+
+  async function lookupCepDirect(cep) {
+    const digits = cleanText(cep).replace(/\D/g, '').slice(0, 8);
+    if (digits.length !== 8) return null;
+
+    const { response, payload } = await requestJson(
+      `https://viacep.com.br/ws/${digits}/json/`,
+      { headers: { Accept: 'application/json' }, cache: 'no-store' },
+      7000
+    );
+
+    if (!response.ok || payload?.erro) throw new Error('CEP não localizado.');
+
+    return {
+      cep: digits,
+      logradouro: cleanText(payload.logradouro),
+      complemento: cleanText(payload.complemento),
+      bairro: cleanText(payload.bairro),
+      cidade: cleanText(payload.localidade),
+      estado: cleanText(payload.uf, 2).toUpperCase(),
+      fontes: ['ViaCEP'],
+      consultadoEm: new Date().toISOString()
+    };
+  }
+
   async function lookupDirect(cnpj) {
     const providers = [
       {
@@ -224,23 +317,59 @@
       {
         name: 'OpenCNPJ',
         url: `https://kitana.opencnpj.com/cnpj/${encodeURIComponent(cnpj)}`,
-        valid: (raw) => raw && raw.success !== false && (raw.data || raw.razaoSocial || raw.cnpj),
+        valid: (raw) => raw && raw.success !== false && (raw.data || raw.razaoSocial || raw.razao_social || raw.cnpj),
         normalize: normalizeOpenCnpj
       }
     ];
-    const attempts = [];
-    for (const provider of providers) {
+
+    const settled = await Promise.allSettled(providers.map(async (provider) => {
+      const { response, payload } = await requestJson(
+        provider.url,
+        { headers: { Accept: 'application/json' }, cache: 'no-store' },
+        10000
+      );
+      if (!response.ok || !provider.valid(payload)) {
+        throw new Error(payload?.message || `HTTP ${response.status}`);
+      }
+      return provider.normalize(payload);
+    }));
+
+    const attempts = settled.map((result, index) => ({
+      source: providers[index].name,
+      ok: result.status === 'fulfilled',
+      message: result.status === 'rejected' ? cleanText(result.reason?.message, 160) : ''
+    }));
+    const records = settled
+      .filter((result) => result.status === 'fulfilled')
+      .map((result) => result.value);
+
+    if (!records.length) {
+      const error = new Error('Não foi possível localizar este CNPJ nas fontes gratuitas. Confirme os 14 números ou preencha manualmente.');
+      error.attempts = attempts;
+      throw error;
+    }
+
+    let merged = mergeCompanyData(records);
+
+    if (
+      merged.cep
+      && ['logradouro', 'bairro', 'cidade', 'estado'].some((field) => !cleanText(merged[field]))
+    ) {
       try {
-        const { response, payload } = await requestJson(provider.url, { headers: { Accept: 'application/json' } }, 9000);
-        if (!response.ok || !provider.valid(payload)) throw new Error(payload?.message || `HTTP ${response.status}`);
-        return { data: provider.normalize(payload), attempts: [...attempts, { source: provider.name, ok: true }], cached: false, mode: 'direct' };
+        const address = await lookupCepDirect(merged.cep);
+        if (address) merged = mergeCompanyData([...records, address]);
+        attempts.push({ source: 'ViaCEP', ok: Boolean(address), message: '' });
       } catch (error) {
-        attempts.push({ source: provider.name, ok: false, message: cleanText(error.message, 160) });
+        attempts.push({ source: 'ViaCEP', ok: false, message: cleanText(error?.message, 160) });
       }
     }
-    const error = new Error('Não foi possível localizar este CNPJ nas fontes gratuitas. Confirme os 14 números ou preencha manualmente.');
-    error.attempts = attempts;
-    throw error;
+
+    return {
+      data: merged,
+      attempts,
+      cached: false,
+      mode: 'direct'
+    };
   }
 
   async function lookup(value, { force = false } = {}) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.4.8" />
+  <meta name="app-version" content="8.4.9" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1603,7 +1603,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
           <div class="card table-card">
             <div class="table-meta"><span id="resultCount">0 resultados</span><label>Exibir <select class="form-control" id="pageSize" style="width:auto;display:inline-block;min-height:34px;padding:5px 28px 5px 8px"><option>10</option><option>25</option><option>50</option><option>100</option></select> por página</label></div>
             <div class="table-wrap"><table><thead><tr>
-              <th data-sort="situacaoVigencia">Situação da Vigência</th><th data-sort="cnpj">CNPJ</th><th data-sort="razaoSocial">Razão Social</th><th data-sort="nomeFantasia">Nome Fantasia</th><th data-sort="inicioVigencia">Início da Vigência</th><th data-sort="fimVigencia">Fim da Vigência</th><th data-sort="diasRestantes">Dias restantes</th><th data-sort="dataCadastro">Data do Cadastro</th><th data-sort="vigenciaResumo">Vigência</th><th data-sort="estado">Estado</th><th data-sort="cidade">Cidade</th><th data-sort="cep">CEP</th><th data-sort="email">E-mail</th><th data-sort="telefone">Telefone</th><th data-sort="polo">Polo</th><th data-sort="situacao">Situação</th><th data-sort="formasContato">Forma de Contato</th><th>Ações</th>
+              <th data-sort="situacaoVigencia">Situação da Vigência</th><th data-sort="cnpj">CNPJ</th><th data-sort="razaoSocial">Razão Social</th><th data-sort="nomeFantasia">Nome Fantasia</th><th data-sort="situacaoCadastral">Situação Cadastral</th><th data-sort="inicioVigencia">Início da Vigência</th><th data-sort="fimVigencia">Fim da Vigência</th><th data-sort="diasRestantes">Dias restantes</th><th data-sort="dataCadastro">Data do Cadastro</th><th data-sort="vigenciaResumo">Vigência</th><th data-sort="estado">Estado</th><th data-sort="cidade">Cidade</th><th data-sort="cep">CEP</th><th data-sort="email">E-mail</th><th data-sort="telefone">Telefone</th><th data-sort="polo">Polo</th><th data-sort="situacao">Situação</th><th data-sort="formasContato">Forma de Contato</th><th>Ações</th>
             </tr></thead><tbody id="companiesTableBody"></tbody></table></div>
             <div class="pagination-bar"><span id="paginationInfo"></span><div class="pagination-controls" id="paginationControls"></div></div>
           </div>
@@ -1963,7 +1963,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.4.8-model-cnae-backup';
+    window.__CONVENIOS_BUILD__ = '8.4.9-cnpj-complete-backup-fix';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -2906,6 +2906,32 @@ window.APP_CONFIG = Object.freeze({
     return '';
   }
 
+  function flattenValues(value) {
+    if (Array.isArray(value)) return value.flatMap(flattenValues);
+    if (value && typeof value === 'object') return Object.values(value).flatMap(flattenValues);
+    return [value];
+  }
+
+  function normalizeEmail(value) {
+    const candidates = flattenValues(value)
+      .flatMap((item) => cleanText(item, 500).split(/[;,|\s]+/))
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    return candidates.find((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item)) || '';
+  }
+
+  function normalizePhone(value) {
+    const candidates = flattenValues(value)
+      .map((item) => cleanText(item, 120))
+      .flatMap((item) => item.split(/[;/|]+/))
+      .map((item) => item.replace(/\D/g, ''))
+      .map((digits) => digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits)
+      .filter((digits) => digits.length === 10 || digits.length === 11);
+
+    return candidates[0] || '';
+  }
+
 
   function formatCnaeCode(value) {
     const raw = cleanText(value, 40);
@@ -2925,6 +2951,17 @@ window.APP_CONFIG = Object.freeze({
     return formattedCode || text;
   }
 
+  function formatNature(code, description) {
+    const normalizedCode = cleanText(code, 40);
+    const text = cleanText(description, 220);
+
+    if (text && normalizedCode && text !== normalizedCode && !text.includes(normalizedCode)) {
+      return `${normalizedCode} — ${text}`;
+    }
+
+    return text || normalizedCode;
+  }
+
   function normalizeTextForCompare(value) {
     return cleanText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
@@ -2936,10 +2973,10 @@ window.APP_CONFIG = Object.freeze({
       nomeFantasia: cleanText(raw.nome_fantasia),
       dataAbertura: normalizeDate(raw.data_inicio_atividade),
       situacaoCadastral: firstText(raw.descricao_situacao_cadastral, raw.situacao_cadastral),
-      naturezaJuridica: firstText(raw.descricao_natureza_juridica, raw.natureza_juridica),
+      naturezaJuridica: formatNature(firstText(raw.codigo_natureza_juridica, raw.natureza_juridica), raw.descricao_natureza_juridica),
       cnaePrincipal: formatCnae(raw.cnae_fiscal, raw.cnae_fiscal_descricao),
-      email: cleanText(raw.email, 254).toLowerCase(),
-      telefone: cleanText(firstText(raw.ddd_telefone_1, raw.ddd_telefone_2)).replace(/\D/g, '').slice(0, 11),
+      email: normalizeEmail(raw.email),
+      telefone: normalizePhone([raw.ddd_telefone_1, raw.ddd_telefone_2]),
       cep: cleanText(raw.cep).replace(/\D/g, '').slice(0, 8),
       logradouro: firstText([raw.descricao_tipo_de_logradouro, raw.logradouro].filter(Boolean).join(' '), raw.logradouro),
       numero: cleanText(raw.numero, 40),
@@ -2960,13 +2997,21 @@ window.APP_CONFIG = Object.freeze({
       nomeFantasia: firstText(data.nomeFantasia, data.tradeName, data.fantasia),
       dataAbertura: normalizeDate(firstText(data.dataInicioAtividades, data.dataAbertura, data.openingDate)),
       situacaoCadastral: firstText(data.situacaoCadastral, data.status),
-      naturezaJuridica: firstText(data.naturezaJuridica, data.legalNature),
+      naturezaJuridica: formatNature(
+        firstText(data.naturezaJuridica?.codigo, data.legalNature?.code, data.codigoNaturezaJuridica),
+        firstText(
+          data.naturezaJuridica?.descricao,
+          data.legalNature?.description,
+          typeof data.naturezaJuridica === 'string' ? data.naturezaJuridica : '',
+          typeof data.legalNature === 'string' ? data.legalNature : ''
+        )
+      ),
       cnaePrincipal: formatCnae(
         firstText(data.cnaePrincipal?.codigo, data.cnaePrincipal?.code, data.cnaeCodigo, data.mainActivity?.code),
         firstText(data.cnaePrincipal?.descricao, data.cnaePrincipal?.description, data.mainActivity?.text, data.mainActivity)
       ),
-      email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
-      telefone: cleanText(firstText(data.telefone, data.phone)).replace(/\D/g, '').slice(0, 11),
+      email: normalizeEmail(firstText(data.email, data.emails, data.correioEletronico)),
+      telefone: normalizePhone(firstText(data.telefone, data.telefones, data.phone, data.phones)),
       cep: cleanText(firstText(data.cep, data.zip)).replace(/\D/g, '').slice(0, 8),
       logradouro: firstText(data.logradouro, data.endereco, data.address),
       numero: firstText(data.numero, data.number),
@@ -3023,10 +3068,8 @@ window.APP_CONFIG = Object.freeze({
         data.cnae_principal,
         data.mainActivity
       ),
-      email: cleanText(firstText(data.email, data.correioEletronico), 254).toLowerCase(),
-      telefone: cleanText(firstText(data.telefone, data.phone))
-        .replace(/\D/g, '')
-        .slice(0, 11),
+      email: normalizeEmail(firstText(data.email, data.emails, data.correioEletronico)),
+      telefone: normalizePhone(firstText(data.telefone, data.telefones, data.phone, data.phones)),
       cep: cleanText(firstText(data.cep, data.zip))
         .replace(/\D/g, '')
         .slice(0, 8),
@@ -3086,6 +3129,56 @@ window.APP_CONFIG = Object.freeze({
     };
   }
 
+  function mergeCompanyData(records) {
+    const fields = [
+      'cnpj', 'razaoSocial', 'nomeFantasia', 'dataAbertura', 'situacaoCadastral',
+      'naturezaJuridica', 'cnaePrincipal', 'email', 'telefone', 'cep',
+      'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado'
+    ];
+    const merged = Object.fromEntries(fields.map((field) => [field, '']));
+    const sources = [];
+
+    records.forEach((record) => {
+      if (!record) return;
+      fields.forEach((field) => {
+        if (!merged[field] && cleanText(record[field])) merged[field] = record[field];
+      });
+      (record.fontes || []).forEach((source) => {
+        const text = cleanText(source);
+        if (text && !sources.includes(text)) sources.push(text);
+      });
+    });
+
+    if (!merged.nomeFantasia) merged.nomeFantasia = merged.razaoSocial;
+    merged.fontes = sources;
+    merged.consultadoEm = new Date().toISOString();
+    return merged;
+  }
+
+  async function lookupCepDirect(cep) {
+    const digits = cleanText(cep).replace(/\D/g, '').slice(0, 8);
+    if (digits.length !== 8) return null;
+
+    const { response, payload } = await requestJson(
+      `https://viacep.com.br/ws/${digits}/json/`,
+      { headers: { Accept: 'application/json' }, cache: 'no-store' },
+      7000
+    );
+
+    if (!response.ok || payload?.erro) throw new Error('CEP não localizado.');
+
+    return {
+      cep: digits,
+      logradouro: cleanText(payload.logradouro),
+      complemento: cleanText(payload.complemento),
+      bairro: cleanText(payload.bairro),
+      cidade: cleanText(payload.localidade),
+      estado: cleanText(payload.uf, 2).toUpperCase(),
+      fontes: ['ViaCEP'],
+      consultadoEm: new Date().toISOString()
+    };
+  }
+
   async function lookupDirect(cnpj) {
     const providers = [
       {
@@ -3097,23 +3190,59 @@ window.APP_CONFIG = Object.freeze({
       {
         name: 'OpenCNPJ',
         url: `https://kitana.opencnpj.com/cnpj/${encodeURIComponent(cnpj)}`,
-        valid: (raw) => raw && raw.success !== false && (raw.data || raw.razaoSocial || raw.cnpj),
+        valid: (raw) => raw && raw.success !== false && (raw.data || raw.razaoSocial || raw.razao_social || raw.cnpj),
         normalize: normalizeOpenCnpj
       }
     ];
-    const attempts = [];
-    for (const provider of providers) {
+
+    const settled = await Promise.allSettled(providers.map(async (provider) => {
+      const { response, payload } = await requestJson(
+        provider.url,
+        { headers: { Accept: 'application/json' }, cache: 'no-store' },
+        10000
+      );
+      if (!response.ok || !provider.valid(payload)) {
+        throw new Error(payload?.message || `HTTP ${response.status}`);
+      }
+      return provider.normalize(payload);
+    }));
+
+    const attempts = settled.map((result, index) => ({
+      source: providers[index].name,
+      ok: result.status === 'fulfilled',
+      message: result.status === 'rejected' ? cleanText(result.reason?.message, 160) : ''
+    }));
+    const records = settled
+      .filter((result) => result.status === 'fulfilled')
+      .map((result) => result.value);
+
+    if (!records.length) {
+      const error = new Error('Não foi possível localizar este CNPJ nas fontes gratuitas. Confirme os 14 números ou preencha manualmente.');
+      error.attempts = attempts;
+      throw error;
+    }
+
+    let merged = mergeCompanyData(records);
+
+    if (
+      merged.cep
+      && ['logradouro', 'bairro', 'cidade', 'estado'].some((field) => !cleanText(merged[field]))
+    ) {
       try {
-        const { response, payload } = await requestJson(provider.url, { headers: { Accept: 'application/json' } }, 9000);
-        if (!response.ok || !provider.valid(payload)) throw new Error(payload?.message || `HTTP ${response.status}`);
-        return { data: provider.normalize(payload), attempts: [...attempts, { source: provider.name, ok: true }], cached: false, mode: 'direct' };
+        const address = await lookupCepDirect(merged.cep);
+        if (address) merged = mergeCompanyData([...records, address]);
+        attempts.push({ source: 'ViaCEP', ok: Boolean(address), message: '' });
       } catch (error) {
-        attempts.push({ source: provider.name, ok: false, message: cleanText(error.message, 160) });
+        attempts.push({ source: 'ViaCEP', ok: false, message: cleanText(error?.message, 160) });
       }
     }
-    const error = new Error('Não foi possível localizar este CNPJ nas fontes gratuitas. Confirme os 14 números ou preencha manualmente.');
-    error.attempts = attempts;
-    throw error;
+
+    return {
+      data: merged,
+      attempts,
+      cached: false,
+      mode: 'direct'
+    };
   }
 
   async function lookup(value, { force = false } = {}) {
@@ -5574,9 +5703,9 @@ window.APP_CONFIG = Object.freeze({
       $('#resultCount').textContent = `${total} ${total===1?'resultado':'resultados'}`;
       $('#paginationInfo').textContent = total ? `Exibindo ${start+1} a ${Math.min(start+state.pageSize,total)} de ${total}` : 'Nenhum registro encontrado';
       $('#companiesTableBody').innerHTML = rows.length ? rows.map(c=>`<tr>
-        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
+        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${escapeHTML(c.situacaoCadastral||'—')}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
         <td><div class="actions-cell"><button class="btn btn-secondary btn-icon action-view" data-id="${c.id}" title="Visualizar"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary btn-icon action-edit" data-id="${c.id}" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="btn btn-secondary btn-icon action-contact" data-id="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button><button class="btn btn-secondary btn-icon action-renew" data-id="${c.id}" title="Marcar como renovado"><i class="fa-solid fa-circle-check"></i></button><button class="btn btn-secondary btn-icon action-duplicate" data-id="${c.id}" title="Duplicar"><i class="fa-solid fa-copy"></i></button><button class="btn btn-danger btn-icon action-delete" data-id="${c.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button></div></td>
-      </tr>`).join('') : `<tr><td colspan="18">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="19">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
       renderPagination(pages); bindTableActions();
     }
     function renderPagination(pages) {
@@ -5655,6 +5784,94 @@ window.APP_CONFIG = Object.freeze({
       return true;
     }
 
+    function setEmptyFormValueFromApi(id, value) {
+      const field = $('#' + id);
+      if (!field || String(field.value || '').trim()) return false;
+      return setFormValueFromApi(id, value);
+    }
+
+    async function fetchCepAddress(cepValue) {
+      const cep = onlyDigits(cepValue);
+      if (cep.length !== 8) throw new Error('CEP incompleto.');
+
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store'
+      });
+
+      if (!response.ok) throw new Error(`Falha na consulta do CEP (${response.status}).`);
+
+      const data = await response.json();
+      if (data?.erro) throw new Error('CEP não encontrado.');
+      return data;
+    }
+
+    async function applyCepAddressAutomatically(
+      cepValue,
+      { requestId = null, expectedCnpj = '', manual = false } = {}
+    ) {
+      const hint = $('#cepHint');
+      const cep = onlyDigits(cepValue);
+
+      if (!cep) return 0;
+      if (cep.length !== 8) {
+        if (manual && hint) hint.textContent = 'CEP incompleto. Informe 8 números.';
+        return 0;
+      }
+
+      if (hint) {
+        hint.textContent = manual
+          ? 'Consultando ViaCEP…'
+          : 'Complementando o endereço automaticamente pelo CEP…';
+      }
+
+      try {
+        const data = await fetchCepAddress(cep);
+
+        if (
+          requestId !== null
+          && (
+            requestId !== state.cnpjRequestId
+            || (expectedCnpj && cnpjKey($('#cnpj')?.value) !== expectedCnpj)
+          )
+        ) {
+          return 0;
+        }
+
+        let populated = 0;
+        [
+          ['logradouro', data.logradouro],
+          ['complemento', data.complemento],
+          ['bairro', data.bairro],
+          ['cidade', data.localidade],
+          ['estado', data.uf]
+        ].forEach(([id, value]) => {
+          if (setEmptyFormValueFromApi(id, value || '')) populated += 1;
+        });
+
+        if (hint) {
+          hint.textContent = populated
+            ? 'Endereço preenchido automaticamente. Todos os campos continuam editáveis.'
+            : 'CEP consultado. Os campos já preenchidos foram preservados.';
+        }
+
+        return populated;
+      } catch (error) {
+        console.warn('[CEP] Consulta indisponível:', error);
+        if (hint) {
+          hint.textContent = manual
+            ? 'Não foi possível consultar o CEP. Preencha o endereço manualmente.'
+            : 'O CEP foi identificado, mas o complemento automático do endereço não respondeu.';
+        }
+
+        if (manual && String(error?.message || '').includes('não encontrado')) {
+          toast('warning', 'CEP não encontrado', 'Verifique o número informado.');
+        }
+
+        return 0;
+      }
+    }
+
     async function performCnpjLookup(rawValue) {
       const key = cnpjKey(rawValue);
       if (key.length !== 14 || !window.cnpjService) return;
@@ -5675,6 +5892,17 @@ window.APP_CONFIG = Object.freeze({
         });
         if (!$('#nomeFantasia')?.value.trim() && $('#razaoSocial')?.value.trim()) {
           populated += setFormValueFromApi('nomeFantasia', $('#razaoSocial').value) ? 1 : 0;
+        }
+
+        const addressIncomplete = ['logradouro', 'bairro', 'cidade', 'estado']
+          .some((id) => !String($('#' + id)?.value || '').trim());
+
+        if ($('#cep')?.value && addressIncomplete) {
+          populated += await applyCepAddressAutomatically($('#cep').value, {
+            requestId,
+            expectedCnpj: key,
+            manual: false
+          });
         }
 
         const sources = Array.isArray(data.fontes) ? data.fontes : (data.fonte ? [data.fonte] : []);
@@ -5920,32 +6148,7 @@ window.APP_CONFIG = Object.freeze({
     function markRenewed(id) { const c=state.data.concedentes.find(x=>x.id===id); if(!c||!canEdit())return; confirmAction('Marcar como renovado',`Confirmar a renovação de “${c.nomeFantasia || c.razaoSocial}”?`,async()=>{try{await window.remoteData.updateCompanyStatus(id,'Renovado',c.formasContato);c.situacao='Renovado';c.updatedAt=new Date().toISOString();renderAll();applyAccessRules();toast('success','Renovação concluída','O cadastro foi marcado como Renovado.');}catch(error){toast('error','Falha ao atualizar',error.message||'Não foi possível atualizar a renovação.');}},false); }
 
     async function lookupCEP() {
-      const cep = onlyDigits($('#cep').value);
-      if (!cep) return;
-      if (cep.length !== 8) {
-        $('#cepHint').textContent = 'CEP incompleto. Informe 8 números.';
-        return;
-      }
-      $('#cepHint').textContent = 'Consultando ViaCEP…';
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-        if (!response.ok) throw new Error('Falha na consulta');
-        const data = await response.json();
-        if (data.erro) {
-          $('#cepHint').textContent = 'CEP não encontrado.';
-          toast('warning', 'CEP não encontrado', 'Verifique o número informado.');
-          return;
-        }
-        setFormValueFromApi('logradouro', data.logradouro || '');
-        setFormValueFromApi('complemento', data.complemento || '');
-        setFormValueFromApi('bairro', data.bairro || '');
-        setFormValueFromApi('cidade', data.localidade || '');
-        setFormValueFromApi('estado', data.uf || '');
-        $('#cepHint').textContent = 'Endereço preenchido pelo CEP. Todos os campos continuam editáveis.';
-      } catch (error) {
-        console.warn('[CEP] Consulta indisponível:', error);
-        $('#cepHint').textContent = 'Não foi possível consultar o CEP. Preencha o endereço manualmente.';
-      }
+      return applyCepAddressAutomatically($('#cep').value, { manual: true });
     }
 
     function refreshContactSelect() {
@@ -7323,7 +7526,7 @@ window.APP_CONFIG = Object.freeze({
       try {
         const payload = buildBackupPayload();
         const content = JSON.stringify(payload, null, 2);
-        const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+        const blob = new Blob([content], { type: 'application/json' });
         const filename = `backup_convenios_${new Date().toLocaleDateString('pt-BR').replaceAll('/', '-')}.json`;
         const downloaded = await saveBlobToDevice(blob, filename, { usePicker: true });
         if (!downloaded) return;
@@ -7493,6 +7696,7 @@ window.APP_CONFIG = Object.freeze({
   <div id="releaseMarkerV844" data-version="8.4.4" hidden></div>
 </body>
 </html>
+
 
 
 
