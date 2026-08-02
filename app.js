@@ -1272,6 +1272,7 @@
       }
     }
 
+    // V8.5.2: composição do Outlook com espaços percent-encoded.
     function submitOutlookMessage(event) {
       event.preventDefault();
 
@@ -1305,12 +1306,18 @@
         return;
       }
 
-      const url = new URL('https://outlook.office.com/mail/deeplink/compose');
-      url.searchParams.set('to', recipient);
-      url.searchParams.set('subject', draft.subject);
-      url.searchParams.set('body', draft.body);
+      // O Outlook Web não interpreta corretamente espaços serializados como "+".
+      // Cada valor é codificado individualmente para manter espaços como "%20".
+      const outlookQuery = [
+        `to=${encodeURIComponent(recipient)}`,
+        `subject=${encodeURIComponent(draft.subject)}`,
+        `body=${encodeURIComponent(draft.body)}`
+      ].join('&');
 
-      const outlookWindow = window.open(url.toString(), '_blank');
+      const outlookUrl =
+        `https://outlook.office.com/mail/deeplink/compose?${outlookQuery}`;
+
+      const outlookWindow = window.open(outlookUrl, '_blank');
       if (!outlookWindow) {
         setOutlookMessageValidation(
           'O navegador bloqueou a nova guia. Libere pop-ups para este site e tente novamente.',

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.5.1" />
+  <meta name="app-version" content="8.5.2" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1983,7 +1983,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.5.1-company-brand-outlook';
+    window.__CONVENIOS_BUILD__ = '8.5.2-outlook-percent-encoding';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -6618,6 +6618,7 @@ window.APP_CONFIG = Object.freeze({
       }
     }
 
+    // V8.5.2: composição do Outlook com espaços percent-encoded.
     function submitOutlookMessage(event) {
       event.preventDefault();
 
@@ -6651,12 +6652,18 @@ window.APP_CONFIG = Object.freeze({
         return;
       }
 
-      const url = new URL('https://outlook.office.com/mail/deeplink/compose');
-      url.searchParams.set('to', recipient);
-      url.searchParams.set('subject', draft.subject);
-      url.searchParams.set('body', draft.body);
+      // O Outlook Web não interpreta corretamente espaços serializados como "+".
+      // Cada valor é codificado individualmente para manter espaços como "%20".
+      const outlookQuery = [
+        `to=${encodeURIComponent(recipient)}`,
+        `subject=${encodeURIComponent(draft.subject)}`,
+        `body=${encodeURIComponent(draft.body)}`
+      ].join('&');
 
-      const outlookWindow = window.open(url.toString(), '_blank');
+      const outlookUrl =
+        `https://outlook.office.com/mail/deeplink/compose?${outlookQuery}`;
+
+      const outlookWindow = window.open(outlookUrl, '_blank');
       if (!outlookWindow) {
         setOutlookMessageValidation(
           'O navegador bloqueou a nova guia. Libere pop-ups para este site e tente novamente.',
@@ -8141,6 +8148,7 @@ window.APP_CONFIG = Object.freeze({
   <div id="releaseMarkerV844" data-version="8.4.4" hidden></div>
 </body>
 </html>
+
 
 
 

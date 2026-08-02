@@ -1,1 +1,1 @@
-﻿8.5.1 - Marca vinculada ao convênio e recados automáticos por marca
+﻿8.5.2 - Espaços corrigidos nos recados preparados no Outlook
