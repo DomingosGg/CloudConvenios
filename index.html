@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.4.9" />
+  <meta name="app-version" content="8.5.0" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1963,7 +1963,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.4.9-cnpj-complete-backup-fix';
+    window.__CONVENIOS_BUILD__ = '8.5.0-outlook-standard-messages';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -6265,19 +6265,372 @@ window.APP_CONFIG = Object.freeze({
       if(!contacts.length)return emptyState('Nenhum contato registrado','Use o botão “Registrar contato” para criar o primeiro histórico.');
       return `<div class="timeline">${contacts.map(c=>`<div class="timeline-item"><div class="timeline-card"><div class="timeline-head"><strong>${escapeHTML(c.resultado)}</strong><div class="timeline-head-actions"><span>${formatDateTime(c.data,c.horario)}</span>${canEdit()?`<button class="btn btn-sm btn-secondary timeline-edit-contact" type="button" data-edit-contact="${c.id}" data-company-id="${company.id}" title="Editar contato"><i class="fa-solid fa-pen"></i></button>`:''}</div></div><div class="timeline-grid"><div><span>Responsável:</span> ${escapeHTML(c.responsavel)}</div><div><span>Forma:</span> ${escapeHTML(c.forma)}</div><div><span>Pessoa contatada:</span> ${escapeHTML(c.pessoa||'—')}</div><div><span>Próxima ação:</span> ${escapeHTML(c.proximaAcao||'—')}</div><div><span>Próximo contato:</span> ${formatDate(c.proximaData)}</div></div>${c.observacoes?`<div class="timeline-notes">${escapeHTML(c.observacoes)}</div>`:''}</div></div>`).join('')}</div>`;
     }
+
+    // V8.5.0: recados padronizados preparados no Outlook Web.
+    const outlookMessageStatuses = Object.freeze({
+      'Não contatado': 'nao-contatado',
+      'Aguardando retorno': 'aguardando-retorno',
+      'Documentação solicitada': 'documentacao-solicitada'
+    });
+
+    function supportsStandardOutlookMessage(companyOrStatus) {
+      const status = typeof companyOrStatus === 'string'
+        ? companyOrStatus
+        : companyOrStatus?.situacao;
+      return Boolean(outlookMessageStatuses[String(status || '').trim()]);
+    }
+
+    function currentOutlookGreeting(date = new Date()) {
+      return date.getHours() < 12 ? 'bom dia' : 'boa tarde';
+    }
+
+    function outlookLocalName(company) {
+      return String(company?.nomeFantasia || company?.razaoSocial || 'Local').trim();
+    }
+
+    function primaryCompanyEmail(value) {
+      const candidates = String(value || '')
+        .split(/[;,]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return candidates.find((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item)) || '';
+    }
+
+    function isValidOutlookRecipient(value) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+    }
+
+    function buildStandardOutlookMessage(company, brand, date = new Date()) {
+      const statusKey = outlookMessageStatuses[String(company?.situacao || '').trim()];
+      const greeting = currentOutlookGreeting(date);
+      const local = outlookLocalName(company);
+      const selectedBrand = String(brand || '').trim();
+
+      if (!statusKey || !selectedBrand) return null;
+
+      if (statusKey === 'nao-contatado') {
+        return {
+          subject: `Renovação de convênio | ${selectedBrand} e ${local}`,
+          body: [
+            `Prezados, ${greeting}, tudo bem?`,
+            `Verificamos que o convênio firmado entre a ${selectedBrand} e ${local} encontra-se próximo do término de sua vigência.`,
+            'Gostaríamos de verificar o interesse na renovação do convênio, por meio de um termo aditivo.',
+            'Caso haja interesse na renovação do convênio, formalizaremos o aditivo para apreciação.',
+            'Permanecemos à disposição para quaisquer esclarecimentos e aguardamos o retorno.',
+            'Atenciosamente,'
+          ].join('\n\n')
+        };
+      }
+
+      if (statusKey === 'aguardando-retorno') {
+        return {
+          subject: `Solicitação de análise da renovação de convênio | ${selectedBrand}`,
+          body: [
+            `Prezados, ${greeting}.`,
+            `Anteriormente, entramos em contato para verificar o interesse na renovação do convênio vigente com a ${selectedBrand}, pelo período de mais 60 meses.`,
+            'A continuidade da parceria reforça a cooperação entre as instituições e contribui diretamente para a formação dos acadêmicos, ao possibilitar a aplicação prática dos conhecimentos adquiridos durante sua trajetória acadêmica.',
+            'Para a concedente, o convênio representa uma oportunidade de aproximação com o ambiente educacional, participação no desenvolvimento de novos profissionais e contato com talentos que poderão contribuir futuramente com o mercado de trabalho.',
+            'Diante disso, solicitamos a gentileza de confirmar o interesse na renovação, para iniciarmos os procedimentos necessários e assegurar a continuidade da parceria.',
+            'Permanecemos à disposição para quaisquer esclarecimentos.',
+            'Atenciosamente,'
+          ].join('\n\n')
+        };
+      }
+
+      return {
+        subject: `Solicitação de análise documental da renovação de convênio | ${selectedBrand}`,
+        body: [
+          `Prezados, ${greeting}, tudo bem?`,
+          `Anteriormente, encaminhamos o aditivo para renovação do convênio vigente com a ${selectedBrand}, pelo período de mais 60 meses.`,
+          'Solicitamos a confirmação do recebimento e a análise documental para seguimento do processo.',
+          'Em caso de recebimento e interesse, pedimos que envie o documento assinado, para atualizarmos o cadastro em nosso sistema. Ressaltamos que o representante da instituição realizará a assinatura do documento e uma cópia será encaminhada para apreciação.',
+          'Agradecemos desde já pela pareceria e atenção.',
+          'Atenciosamente,'
+        ].join('\n\n')
+      };
+    }
+
+    function ensureOutlookMessageUI() {
+      if (!$('#outlookMessageModalBackdrop')) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div class="modal-backdrop" id="outlookMessageModalBackdrop" aria-hidden="true">
+            <div class="modal lg">
+              <form id="outlookMessageForm" novalidate>
+                <div class="modal-header">
+                  <div>
+                    <h3>Preparar recado no Outlook</h3>
+                    <span id="outlookMessageModalSubtitle" style="display:block;color:var(--muted);font-size:12px;margin-top:4px"></span>
+                  </div>
+                  <button class="icon-btn" type="button" data-close="outlookMessageModalBackdrop" aria-label="Fechar">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  <input type="hidden" id="outlookMessageCompanyId">
+                  <div class="summary-box" style="margin-bottom:16px">
+                    <i class="fa-brands fa-microsoft"></i>
+                    O sistema abrirá o Outlook corporativo com destinatário, título e recado preenchidos. Revise a mensagem no Outlook antes de pressionar Enviar.
+                  </div>
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label>Concedente</label>
+                      <input id="outlookMessageCompany" type="text" readonly>
+                    </div>
+                    <div class="form-group">
+                      <label>Situação</label>
+                      <input id="outlookMessageSituation" type="text" readonly>
+                    </div>
+                    <div class="form-group full">
+                      <label>Marca <span class="required">*</span></label>
+                      <div style="display:flex;flex-wrap:wrap;gap:10px">
+                        <label class="check-option" style="min-width:170px">
+                          <input type="radio" name="outlookMessageBrand" value="Uniasselvi">
+                          Uniasselvi
+                        </label>
+                        <label class="check-option" style="min-width:170px">
+                          <input type="radio" name="outlookMessageBrand" value="Unicesumar">
+                          Unicesumar
+                        </label>
+                      </div>
+                    </div>
+                    <div class="form-group full">
+                      <label>Destinatário <span class="required">*</span></label>
+                      <input id="outlookMessageRecipient" type="email" autocomplete="off" placeholder="contato@concedente.com.br" required>
+                      <small>O endereço foi preenchido com o e-mail cadastrado e pode ser corrigido antes de abrir o Outlook.</small>
+                    </div>
+                    <div class="form-group full">
+                      <label>Título do e-mail</label>
+                      <input id="outlookMessageSubject" type="text" readonly>
+                    </div>
+                    <div class="form-group full">
+                      <label>Corpo do e-mail</label>
+                      <textarea id="outlookMessageBody" rows="16" readonly></textarea>
+                    </div>
+                  </div>
+                  <div id="outlookMessageValidation" class="summary-box" style="margin-top:14px">
+                    Selecione a marca para gerar o recado.
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-close="outlookMessageModalBackdrop">Cancelar</button>
+                  <button type="submit" class="btn btn-primary" id="openOutlookMessage" disabled>
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir no Outlook
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        `);
+      }
+
+      const addContactButton = $('#addContactSelected');
+      if (addContactButton && !$('#prepareOutlookSelected')) {
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.flexWrap = 'wrap';
+        actions.style.gap = '8px';
+
+        const outlookButton = document.createElement('button');
+        outlookButton.type = 'button';
+        outlookButton.id = 'prepareOutlookSelected';
+        outlookButton.className = 'btn btn-sm btn-secondary hidden';
+        outlookButton.innerHTML = '<i class="fa-solid fa-envelope"></i>Preparar recado';
+
+        addContactButton.parentElement.insertBefore(actions, addContactButton);
+        actions.appendChild(outlookButton);
+        actions.appendChild(addContactButton);
+      }
+    }
+
+    function setOutlookMessageValidation(message, type = 'info') {
+      const box = $('#outlookMessageValidation');
+      if (!box) return;
+      box.textContent = message;
+      box.style.borderColor = type === 'error'
+        ? 'rgba(220,38,38,.35)'
+        : type === 'success'
+          ? 'rgba(22,163,74,.35)'
+          : '';
+      box.style.color = type === 'error'
+        ? '#b91c1c'
+        : type === 'success'
+          ? '#15803d'
+          : '';
+    }
+
+    function selectedOutlookBrand() {
+      return document.querySelector('input[name="outlookMessageBrand"]:checked')?.value || '';
+    }
+
+    function refreshOutlookMessagePreview() {
+      const company = state.data.concedentes.find(
+        (item) => item.id === $('#outlookMessageCompanyId')?.value
+      );
+      const brand = selectedOutlookBrand();
+      const draft = company && brand
+        ? buildStandardOutlookMessage(company, brand)
+        : null;
+      const recipient = $('#outlookMessageRecipient')?.value.trim() || '';
+      const submit = $('#openOutlookMessage');
+
+      if ($('#outlookMessageSubject')) {
+        $('#outlookMessageSubject').value = draft?.subject || '';
+      }
+      if ($('#outlookMessageBody')) {
+        $('#outlookMessageBody').value = draft?.body || '';
+      }
+
+      const brandOk = Boolean(brand);
+      const recipientOk = isValidOutlookRecipient(recipient);
+      const draftOk = Boolean(draft);
+
+      if (submit) submit.disabled = !(brandOk && recipientOk && draftOk);
+
+      if (!brandOk) {
+        setOutlookMessageValidation('Selecione Uniasselvi ou Unicesumar para preencher o recado.');
+      } else if (!recipientOk) {
+        setOutlookMessageValidation('Informe um endereço de e-mail válido para continuar.', 'error');
+      } else {
+        setOutlookMessageValidation('Recado validado. O Outlook será aberto para sua conferência e envio.', 'success');
+      }
+    }
+
+    function openOutlookMessage(companyId) {
+      ensureOutlookMessageUI();
+      const company = state.data.concedentes.find((item) => item.id === companyId);
+
+      if (!company) {
+        toast('error', 'Concedente não encontrada', 'Não foi possível localizar o cadastro selecionado.');
+        return;
+      }
+
+      if (!supportsStandardOutlookMessage(company)) {
+        toast(
+          'warning',
+          'Recado específico necessário',
+          'Esta situação não utiliza um dos recados padronizados configurados.'
+        );
+        return;
+      }
+
+      $('#outlookMessageCompanyId').value = company.id;
+      $('#outlookMessageCompany').value = outlookLocalName(company);
+      $('#outlookMessageSituation').value = company.situacao || '';
+      $('#outlookMessageRecipient').value = primaryCompanyEmail(company.email);
+      $('#outlookMessageSubject').value = '';
+      $('#outlookMessageBody').value = '';
+      $('#outlookMessageModalSubtitle').textContent = `${outlookLocalName(company)} • ${company.situacao}`;
+
+      document.querySelectorAll('input[name="outlookMessageBrand"]').forEach((input) => {
+        input.checked = false;
+      });
+
+      refreshOutlookMessagePreview();
+      openModal('outlookMessageModalBackdrop');
+
+      if (!$('#outlookMessageRecipient').value) {
+        setTimeout(() => $('#outlookMessageRecipient')?.focus(), 80);
+        toast(
+          'warning',
+          'E-mail não cadastrado',
+          'Informe o destinatário na janela de validação antes de abrir o Outlook.'
+        );
+      }
+    }
+
+    function submitOutlookMessage(event) {
+      event.preventDefault();
+
+      const company = state.data.concedentes.find(
+        (item) => item.id === $('#outlookMessageCompanyId')?.value
+      );
+      const brand = selectedOutlookBrand();
+      const recipient = $('#outlookMessageRecipient')?.value.trim() || '';
+      const draft = company && brand
+        ? buildStandardOutlookMessage(company, brand)
+        : null;
+
+      if (!company || !supportsStandardOutlookMessage(company)) {
+        setOutlookMessageValidation('A concedente ou a situação não é válida para este recado.', 'error');
+        return;
+      }
+
+      if (!brand) {
+        setOutlookMessageValidation('Selecione Uniasselvi ou Unicesumar.', 'error');
+        return;
+      }
+
+      if (!isValidOutlookRecipient(recipient)) {
+        setOutlookMessageValidation('Informe um endereço de e-mail válido.', 'error');
+        $('#outlookMessageRecipient')?.focus();
+        return;
+      }
+
+      if (!draft) {
+        setOutlookMessageValidation('Não foi possível gerar o recado desta situação.', 'error');
+        return;
+      }
+
+      const url = new URL('https://outlook.office.com/mail/deeplink/compose');
+      url.searchParams.set('to', recipient);
+      url.searchParams.set('subject', draft.subject);
+      url.searchParams.set('body', draft.body);
+
+      const outlookWindow = window.open(url.toString(), '_blank');
+      if (!outlookWindow) {
+        setOutlookMessageValidation(
+          'O navegador bloqueou a nova guia. Libere pop-ups para este site e tente novamente.',
+          'error'
+        );
+        toast('error', 'Outlook bloqueado', 'Permita a abertura de pop-ups para preparar o recado.');
+        return;
+      }
+
+      try { outlookWindow.opener = null; } catch {}
+      closeModal('outlookMessageModalBackdrop');
+      toast(
+        'success',
+        'Recado preparado',
+        'O Outlook foi aberto. Revise o conteúdo e pressione Enviar.'
+      );
+    }
+
     function renderContactsPanel() {
       const q=normalize($('#contactCompanySearch').value); const companies=state.data.concedentes.filter(c=>normalize(`${c.nomeFantasia} ${c.razaoSocial} ${c.cnpj} ${c.cidade}`).includes(q)).sort((a,b)=>(a.nomeFantasia||a.razaoSocial).localeCompare(b.nomeFantasia||b.razaoSocial,'pt-BR'));
       $('#contactCompanyList').innerHTML=companies.length?companies.map(c=>`<div class="contact-company-item ${state.selectedContactCompanyId===c.id?'active':''}" data-id="${c.id}"><strong>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</strong><small>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)} • ${c.contatos.length} contato(s)</small></div>`).join(''):emptyState('Nenhuma concedente encontrada','Ajuste a pesquisa.');
       $$('.contact-company-item').forEach(el=>el.onclick=()=>{state.selectedContactCompanyId=el.dataset.id;renderContactsPanel();});
       const c=state.data.concedentes.find(x=>x.id===state.selectedContactCompanyId);
-      if(c){$('#contactTimelineTitle').textContent=c.nomeFantasia||c.razaoSocial;$('#contactTimelineSubtitle').textContent=`${c.cnpj||'Sem CNPJ'} • ${c.cidade}/${c.estado}`;$('#addContactSelected').classList.remove('hidden');$('#contactTimeline').innerHTML=renderTimelineHTML(c);}else{$('#contactTimelineTitle').textContent='Selecione uma concedente';$('#contactTimelineSubtitle').textContent='O histórico será exibido aqui.';$('#addContactSelected').classList.add('hidden');$('#contactTimeline').innerHTML=emptyState('Nenhuma concedente selecionada','Escolha uma empresa na lista ao lado.');}
+      const outlookButton = $('#prepareOutlookSelected');
+      if(c){
+        $('#contactTimelineTitle').textContent=c.nomeFantasia||c.razaoSocial;
+        $('#contactTimelineSubtitle').textContent=`${c.cnpj||'Sem CNPJ'} • ${c.cidade}/${c.estado}`;
+        $('#addContactSelected').classList.remove('hidden');
+        if(outlookButton){
+          outlookButton.dataset.companyId=c.id;
+          outlookButton.classList.toggle('hidden',!supportsStandardOutlookMessage(c));
+          outlookButton.title=supportsStandardOutlookMessage(c)
+            ? `Preparar recado padrão para ${c.situacao}`
+            : 'Esta situação utiliza um recado específico';
+        }
+        $('#contactTimeline').innerHTML=renderTimelineHTML(c);
+      }else{
+        $('#contactTimelineTitle').textContent='Selecione uma concedente';
+        $('#contactTimelineSubtitle').textContent='O histórico será exibido aqui.';
+        $('#addContactSelected').classList.add('hidden');
+        if(outlookButton){
+          outlookButton.dataset.companyId='';
+          outlookButton.classList.add('hidden');
+        }
+        $('#contactTimeline').innerHTML=emptyState('Nenhuma concedente selecionada','Escolha uma empresa na lista ao lado.');
+      }
     }
 
     function renderKanban() {
-      $('#kanbanBoard').innerHTML=kanbanStages.map(stage=>{const companies=state.data.concedentes.filter(c=>c.situacao===stage);return `<section class="kanban-column" data-stage="${stage}"><div class="kanban-head"><strong>${stage}</strong><span class="kanban-count">${companies.length}</span></div><div class="kanban-list">${companies.map(c=>{const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia);const lc=latestContact(c);return `<article class="kanban-card" draggable="true" data-id="${c.id}"><h4>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</h4><div class="company-name">${escapeHTML(c.razaoSocial)}</div><div class="kanban-info"><div>CNPJ<strong>${escapeHTML(c.cnpj||'—')}</strong></div><div>Localização<strong>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)}</strong></div><div>Polo<strong>${escapeHTML(c.polo)}</strong></div><div>Fim da vigência<strong>${formatDate(c.fimVigencia)}</strong></div><div>Dias restantes<strong>${info.days===null?'—':info.days}</strong></div><div>Último contato<strong>${lc?formatDate(lc.data):'—'}</strong></div></div><div class="kanban-footer"><span class="badge ${info.days!==null&&info.days<0?'badge-danger':info.days!==null&&info.days<=30?'badge-orange':'badge-muted'}">${info.days===null?'Sem data':info.days<0?'Vencido':`${info.days} dias`}</span><button class="btn btn-sm btn-secondary" data-kanban-contact="${c.id}"><i class="fa-solid fa-phone"></i></button></div>${lc&&lc.proximaAcao?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Próxima ação: ${escapeHTML(lc.proximaAcao)}</div>`:''}</article>`;}).join('')}</div></section>`;}).join('');
+      $('#kanbanBoard').innerHTML=kanbanStages.map(stage=>{const companies=state.data.concedentes.filter(c=>c.situacao===stage);return `<section class="kanban-column" data-stage="${stage}"><div class="kanban-head"><strong>${stage}</strong><span class="kanban-count">${companies.length}</span></div><div class="kanban-list">${companies.map(c=>{const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia);const lc=latestContact(c);return `<article class="kanban-card" draggable="true" data-id="${c.id}"><h4>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</h4><div class="company-name">${escapeHTML(c.razaoSocial)}</div><div class="kanban-info"><div>CNPJ<strong>${escapeHTML(c.cnpj||'—')}</strong></div><div>Localização<strong>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)}</strong></div><div>Polo<strong>${escapeHTML(c.polo)}</strong></div><div>Fim da vigência<strong>${formatDate(c.fimVigencia)}</strong></div><div>Dias restantes<strong>${info.days===null?'—':info.days}</strong></div><div>Último contato<strong>${lc?formatDate(lc.data):'—'}</strong></div></div><div class="kanban-footer"><span class="badge ${info.days!==null&&info.days<0?'badge-danger':info.days!==null&&info.days<=30?'badge-orange':'badge-muted'}">${info.days===null?'Sem data':info.days<0?'Vencido':`${info.days} dias`}</span><div style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" data-kanban-contact="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button>${supportsStandardOutlookMessage(c)?`<button class="btn btn-sm btn-secondary" data-kanban-outlook="${c.id}" title="Preparar recado no Outlook"><i class="fa-solid fa-envelope"></i></button>`:''}</div></div>${lc&&lc.proximaAcao?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Próxima ação: ${escapeHTML(lc.proximaAcao)}</div>`:''}</article>`;}).join('')}</div></section>`;}).join('');
       $$('.kanban-card').forEach(card=>{card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',card.dataset.id);card.style.opacity='.55';});card.addEventListener('dragend',()=>card.style.opacity='1');});
       $$('.kanban-column').forEach(col=>{col.addEventListener('dragover',e=>{if(!canEdit())return;e.preventDefault();col.classList.add('drag-over');});col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drag-over');if(!canEdit()){toast('error','Acesso restrito','Seu perfil não pode movimentar o Kanban.');return;}const id=e.dataTransfer.getData('text/plain');const c=state.data.concedentes.find(x=>x.id===id);if(c&&c.situacao!==col.dataset.stage){const previous=c.situacao;c.situacao=col.dataset.stage;renderAll();applyAccessRules();try{await window.remoteData.updateCompanyStatus(id,col.dataset.stage,c.formasContato);toast('success','Etapa atualizada',`O cartão foi movido para “${col.dataset.stage}”.`);}catch(error){c.situacao=previous;renderAll();applyAccessRules();toast('error','Falha ao mover cartão',error.message||'Não foi possível atualizar a etapa.');}}});});
       $$('[data-kanban-contact]').forEach(b=>b.onclick=e=>{e.stopPropagation();openContactForm(b.dataset.kanbanContact);});
+      $$('[data-kanban-outlook]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openOutlookMessage(b.dataset.kanbanOutlook);});
       const board = $('#kanbanBoard');
       const scroller = board?.closest('.kanban-wrap');
       if (scroller) {
@@ -7604,6 +7957,10 @@ window.APP_CONFIG = Object.freeze({
       $('#pageSize').onchange=e=>{state.pageSize=Number(e.target.value);state.page=1;renderCompanies();};
       $$('th[data-sort]').forEach(th=>th.onclick=()=>{const k=th.dataset.sort;if(state.sort.key===k)state.sort.dir=state.sort.dir==='asc'?'desc':'asc';else state.sort={key:k,dir:'asc'};renderCompanies();});
       $('#contactForm').addEventListener('submit',e=>{e.preventDefault();saveContact();}); $('#newContactGlobal').onclick=()=>openContactForm(); $('#addContactSelected').onclick=()=>openContactForm(state.selectedContactCompanyId); $('#contactCompanySearch').addEventListener('input',renderContactsPanel);
+      $('#prepareOutlookSelected')?.addEventListener('click',()=>openOutlookMessage($('#prepareOutlookSelected').dataset.companyId||state.selectedContactCompanyId));
+      $('#outlookMessageForm')?.addEventListener('submit',submitOutlookMessage);
+      $('#outlookMessageRecipient')?.addEventListener('input',refreshOutlookMessagePreview);
+      document.querySelectorAll('input[name="outlookMessageBrand"]').forEach((input)=>input.addEventListener('change',refreshOutlookMessagePreview));
       document.addEventListener('click',(event)=>{
         const button=event.target.closest?.('[data-edit-contact]');
         if(!button)return;
@@ -7668,7 +8025,7 @@ window.APP_CONFIG = Object.freeze({
     });
 
     function init() {
-      loadData();setupStaticOptions();bindEvents();applyTheme();renderAll();updateMigrationSummary();applyAccessRules();
+      loadData();setupStaticOptions();ensureOutlookMessageUI();bindEvents();applyTheme();renderAll();updateMigrationSummary();applyAccessRules();
 
       document.addEventListener('click',(event)=>{
         const restricted=event.target.closest?.('[data-admin-only], .action-delete');
@@ -7696,6 +8053,7 @@ window.APP_CONFIG = Object.freeze({
   <div id="releaseMarkerV844" data-version="8.4.4" hidden></div>
 </body>
 </html>
+
 
 
 

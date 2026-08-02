@@ -1,1 +1,1 @@
-﻿8.4.9 - CNPJ completo, endereço automático, situação cadastral e backup corrigido
+﻿8.5.0 - Recados padronizados no Outlook para situações selecionadas
