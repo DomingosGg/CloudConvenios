@@ -1,1 +1,1 @@
-﻿8.7.0 - Ações em massa, edição simultânea, relatório gerencial, filtros salvos e saúde do sistema
+﻿8.6.0 - Fluxo operacional completo, fila, qualidade, modelos e confirmaÃ§Ã£o de envio
