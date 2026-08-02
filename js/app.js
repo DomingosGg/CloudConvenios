@@ -31,6 +31,20 @@
       if (key === 'unicesumar') return 'Unicesumar';
       return '';
     }
+
+    function companyRegistrationKey(company = {}) {
+      const cnpj = cnpjKey(company.cnpj);
+      const brand = normalizeBrand(company.marca);
+      return cnpj && brand ? `${cnpj}|${brand}` : '';
+    }
+
+    function findDuplicateCompany(company = {}, excludeId = '') {
+      const key = companyRegistrationKey(company);
+      if (!key) return null;
+      return state.data.concedentes.find((item) =>
+        item.id !== excludeId && companyRegistrationKey(item) === key
+      ) || null;
+    }
     const daysBetween = (a, b) => Math.ceil((b - a) / 86400000);
     const monthDiff = (start, end) => {
       if (!start || !end) return 0;
@@ -729,19 +743,22 @@
     function duplicateCompany(id) {
       const company = state.data.concedentes.find((item) => item.id === id);
       if (!company) return;
-      const copy = typeof structuredClone === 'function' ? structuredClone(company) : JSON.parse(JSON.stringify(company));
+      const originalBrand = normalizeBrand(company.marca);
+      const copy = typeof structuredClone === 'function'
+        ? structuredClone(company)
+        : JSON.parse(JSON.stringify(company));
       copy.id = '';
-      copy.cnpj = '';
-      copy.razaoSocial = `Cópia - ${copy.razaoSocial}`;
-      copy.nomeFantasia = `Cópia - ${copy.nomeFantasia}`;
+      copy.marca = '';
       copy.dataCadastro = todayISO();
-      copy.fonteCnpj = '';
-      copy.consultadoEm = '';
       copy.contatos = [];
       copy.demo = false;
       openCompanyForm(null, copy);
-      state.cnpjLastKey = '';
-      toast('info', 'Cadastro duplicado', 'Informe um novo CNPJ antes de salvar. A consulta será automática.');
+      state.cnpjLastKey = cnpjKey(copy.cnpj);
+      toast(
+        'info',
+        'Cadastro para outra marca',
+        `O CNPJ foi mantido. Selecione uma marca diferente de ${originalBrand || 'a marca original'} antes de salvar.`
+      );
     }
 
     function updateVigenciaForm() {
@@ -816,11 +833,21 @@
       return valid;
     }
 
+    // V8.5.3: duplicidade definida pela combinação CNPJ + marca.
     async function saveCompany(data) {
       if (!canEdit()) { toast('error','Acesso restrito','Seu perfil não pode alterar concedentes.'); return; }
       const existingIndex=state.data.concedentes.findIndex(c=>c.id===data.id);
-      const duplicate=state.data.concedentes.find((company) => cnpjKey(company.cnpj) && cnpjKey(company.cnpj) === cnpjKey(data.cnpj) && company.id !== data.id);
-      if(duplicate){ $('#cnpj').classList.add('invalid'); toast('error','CNPJ duplicado','Já existe uma concedente cadastrada com este CNPJ.'); return; }
+      const duplicate = findDuplicateCompany(data, data.id);
+      if (duplicate) {
+        $('#cnpj').classList.add('invalid');
+        $('#marcaConvenioGroup')?.classList.add('invalid');
+        toast(
+          'error',
+          'CNPJ e marca duplicados',
+          `Este CNPJ já está cadastrado para a marca ${normalizeBrand(data.marca)}.`
+        );
+        return;
+      }
       const submit=$('#companyForm button[type="submit"]');
       if(submit){submit.disabled=true;submit.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>Salvando...';}
       try {
@@ -2033,10 +2060,16 @@
       const warnings = [];
       const enrich = importEnrichmentEnabled();
       const validCnpj = !company.cnpj || cnpjValidLength(company.cnpj);
-      const existing = company.cnpj
-        ? state.data.concedentes.find((item) => cnpjKey(item.cnpj) === cnpjKey(company.cnpj)) || null
+      const existing = findDuplicateCompany(company);
+      const registrationKey = companyRegistrationKey(company);
+      const repeatedInFile = registrationKey
+        ? state.importRows.find((other) =>
+            other !== entry
+            && other.rowNumber < entry.rowNumber
+            && companyRegistrationKey(other.company) === registrationKey
+          ) || null
         : null;
-      entry.duplicate = existing;
+      entry.duplicate = existing || repeatedInFile?.company || null;
 
       if (company.cnpj && !validCnpj) issues.push('CNPJ deve ter 14 caracteres');
       if (!company.cnpj && !company.razaoSocial) issues.push('Informe CNPJ ou Razão Social');
@@ -2078,7 +2111,11 @@
         );
       }
       if (entry.lookupError) warnings.push(`Consulta CNPJ: ${entry.lookupError}`);
-      if (existing) warnings.push('CNPJ já cadastrado');
+      if (existing) {
+        warnings.push(`CNPJ já cadastrado para a marca ${normalizeBrand(company.marca)}`);
+      } else if (repeatedInFile) {
+        warnings.push(`CNPJ e marca repetidos na linha ${repeatedInFile.rowNumber}`);
+      }
 
       entry.issues = [...new Set(issues)];
       entry.warnings = [...new Set(warnings)];
@@ -2438,9 +2475,7 @@
             renderImportPreview();
             if (entry.issues.length) throw new Error(entry.issues.join('; '));
 
-            const existing = company.cnpj
-              ? state.data.concedentes.find((item) => cnpjKey(item.cnpj) === cnpjKey(company.cnpj))
-              : null;
+            const existing = findDuplicateCompany(company);
             if (existing && strategy === 'ignore') {
               skipped += 1;
               continue;

@@ -5,6 +5,21 @@
   const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 
   const cnpjKey = (value = '') => String(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const brandKey = (value = '') => {
+    const key = String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z]/g, '');
+    if (key === 'uniasselvi') return 'Uniasselvi';
+    if (key === 'unicesumar') return 'Unicesumar';
+    return '';
+  };
+  const companyRegistrationKey = (company = {}) => {
+    const cnpj = cnpjKey(company.cnpj);
+    const brand = brandKey(company.marca);
+    return cnpj && brand ? `${cnpj}|${brand}` : '';
+  };
   const nullable = (value) => {
     const text = String(value ?? '').trim();
     return text || null;
@@ -134,7 +149,7 @@
     const message = error.message || error.details || fallback;
     const normalized = String(message).toLowerCase();
     if (error.code === '23505' || normalized.includes('duplicate key')) {
-      return new Error('Já existe uma concedente cadastrada com este CNPJ.');
+      return new Error('Já existe uma concedente cadastrada com este CNPJ para a mesma marca.');
     }
     if (error.code === '42501' || normalized.includes('row-level security') || normalized.includes('permission denied')) {
       return new Error('Seu perfil não possui permissão para realizar esta ação.');
@@ -360,7 +375,11 @@
   async function migrateLocal(companies) {
     assertAdmin();
     const current = await listCompanies();
-    const cnpjMap = new Map(current.filter((item) => cnpjKey(item.cnpj)).map((item) => [cnpjKey(item.cnpj), item]));
+    const registrationMap = new Map(
+      current
+        .map((item) => [companyRegistrationKey(item), item])
+        .filter(([key]) => Boolean(key))
+    );
     let inserted = 0;
     let updated = 0;
     let contactsInserted = 0;
@@ -369,8 +388,8 @@
 
     for (const source of companies || []) {
       try {
-        const digits = cnpjKey(source.cnpj);
-        const existing = digits ? cnpjMap.get(digits) : null;
+        const registrationKey = companyRegistrationKey(source);
+        const existing = registrationKey ? registrationMap.get(registrationKey) : null;
         let target;
         if (existing) {
           target = await updateCompany({ ...source, id: existing.id, contatos: existing.contatos || [] });
@@ -378,7 +397,7 @@
         } else {
           target = await createCompany(source);
           inserted += 1;
-          if (digits) cnpjMap.set(digits, target);
+          if (registrationKey) registrationMap.set(registrationKey, target);
         }
 
         const existingContactKeys = new Set((existing?.contatos || []).map((contact) => `${contact.data}|${contact.horario}|${contact.resultado}|${contact.responsavel}`));

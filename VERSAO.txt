@@ -1,1 +1,1 @@
-﻿8.5.2 - Espaços corrigidos nos recados preparados no Outlook
+﻿8.5.3 - Duplicidade controlada pela combinação CNPJ e marca
