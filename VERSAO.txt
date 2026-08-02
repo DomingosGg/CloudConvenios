@@ -1,1 +1,1 @@
-﻿8.6.0 - Fluxo operacional completo, fila, qualidade, modelos e confirmaÃ§Ã£o de envio
+﻿8.6.1 - Dashboard simplificado e filtros de marca nos painéis

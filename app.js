@@ -365,8 +365,21 @@
     function countBy(arr, getter) { return arr.reduce((acc,item)=>{ const k = getter(item) || 'Não informado'; acc[k]=(acc[k]||0)+1; return acc; },{}); }
     function latestContact(company) { return [...(company.contatos||[])].sort((a,b)=>`${b.data} ${b.horario}`.localeCompare(`${a.data} ${a.horario}`))[0] || null; }
 
+    // V8.6.1: filtros de marca nos painéis e Dashboard simplificado.
+    function selectedBrandFilter(selector) {
+      return normalizeBrand($(selector)?.value || '');
+    }
+
+    function filterCompaniesByBrand(companies, selector) {
+      const brand = selectedBrandFilter(selector);
+      return brand
+        ? companies.filter((company) => normalizeBrand(company.marca) === brand)
+        : companies;
+    }
+
+
     function renderDashboard() {
-      const data = state.data.concedentes.map(normalizeCompany);
+      const data = filterCompaniesByBrand(state.data.concedentes.map(normalizeCompany), '#dashboardBrandFilter');
       const metrics = [
         ['Total de concedentes',data.length,'fa-building','primary'],
         ['Convênios vigentes',data.filter(c=>c.situacaoVigencia==='Vigente').length,'fa-circle-check','success'],
@@ -389,8 +402,6 @@
       const upcoming = data.filter(c=>c.fimVigencia).sort((a,b)=>parseDate(a.fimVigencia)-parseDate(b.fimVigencia)).slice(0,7);
       $('#upcomingList').innerHTML = upcoming.length ? upcoming.map(c=>{ const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia); return `<li class="list-row"><span class="list-dot" style="background:${info.days < 0 ? '#dc2626' : info.days <= 30 ? '#f97316' : '#d9a200'}"></span><div class="list-main"><strong>${escapeHTML(c.nomeFantasia || c.razaoSocial)}</strong><small>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)} • ${badgeForVigencia(c.situacaoVigencia)}</small></div><div class="list-side">${formatDate(c.fimVigencia)}<br>${info.days < 0 ? `há ${Math.abs(info.days)} dias` : `em ${info.days} dias`}</div></li>`; }).join('') : emptyState('Nenhum vencimento informado','Cadastre datas finais para acompanhar os prazos.');
 
-      const activities = data.flatMap(c=>(c.contatos||[]).map(ct=>({...ct,company:c}))).sort((a,b)=>`${b.data} ${b.horario}`.localeCompare(`${a.data} ${a.horario}`)).slice(0,8);
-      $('#recentActivities').innerHTML = activities.length ? activities.map(a=>`<li class="list-row"><span class="list-dot"></span><div class="list-main"><strong>${escapeHTML(a.company.nomeFantasia || a.company.razaoSocial)}</strong><small>${escapeHTML(a.forma)} • ${escapeHTML(a.responsavel)} • ${escapeHTML(a.resultado)}</small></div><div class="list-side">${formatDateTime(a.data,a.horario)}</div></li>`).join('') : emptyState('Nenhuma atividade recente','Registre contatos para formar o histórico.');
       renderAlerts();
     }
 
@@ -2970,6 +2981,8 @@
           .workflow-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.workflow-card{padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
           .workflow-card span{display:block;color:var(--muted);font-size:10px}.workflow-card strong{font-size:22px}.workflow-card button{margin-top:9px}
           .workflow-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:14px}.workflow-toolbar .field{min-width:170px;flex:1}
+          .workflow-brand-filter{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+          .workflow-brand-filter label{font-size:10px;color:var(--muted);white-space:nowrap}.workflow-brand-filter select{min-width:150px}
           .workflow-table td{vertical-align:top}.workflow-table small{display:block;color:var(--muted);margin-top:4px}.workflow-actions{display:flex;gap:6px;flex-wrap:wrap}
           .workflow-due-overdue{color:#b91c1c;font-weight:700}.workflow-due-today{color:#d97706;font-weight:700}.workflow-due-upcoming{color:#1d4ed8;font-weight:700}
           .quality-tags{display:flex;flex-wrap:wrap;gap:5px}.quality-tag{font-size:9px;padding:4px 7px;border-radius:999px;background:rgba(220,38,38,.08);color:#b91c1c;border:1px solid rgba(220,38,38,.16)}
@@ -2989,7 +3002,7 @@
       }
       const reportsNav = $('.nav-item[data-panel="relatorios"]');
       if (reportsNav && !$('.nav-item[data-panel="qualidade"]')) {
-        reportsNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="qualidade"><i class="fa-solid fa-list-circle-check"></i><span class="nav-label">Qualidade dos dados</span></button>');
+        reportsNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="qualidade"><i class="fa-solid fa-circle-check"></i><span class="nav-label">Qualidade dos dados</span></button>');
       }
 
       const panelsHost = $('#panel-dashboard')?.parentElement;
@@ -3001,6 +3014,7 @@
             <div class="card" style="margin-top:14px">
               <div class="workflow-toolbar">
                 <div class="field"><label>Responsabilidade</label><select class="form-control" id="queueScope"><option value="mine">Minha fila</option><option value="all">Todos</option><option value="unassigned">Sem responsável</option></select></div>
+                <div class="field"><label>Marca</label><select class="form-control" id="queueBrand"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>
                 <div class="field"><label>Prazo</label><select class="form-control" id="queueDue"><option value="">Todos os prazos</option><option value="atrasado">Atrasados</option><option value="hoje">Para hoje</option><option value="proximos-7">Próximos 7 dias</option><option value="sem-data">Sem data definida</option></select></div>
                 <div class="field"><label>Prioridade</label><select class="form-control" id="queuePriority"><option value="">Todas</option><option>Urgente</option><option>Alta</option><option>Média</option><option>Baixa</option></select></div>
                 <div class="field"><label>Pesquisar</label><input class="form-control" id="queueSearch" placeholder="Empresa, cidade, ação..." /></div>
@@ -3014,6 +3028,7 @@
             <div class="card" style="margin-top:14px">
               <div class="workflow-toolbar">
                 <div class="field"><label>Tipo de pendência</label><select class="form-control" id="qualityIssueFilter"><option value="">Todas</option><option value="email">E-mail</option><option value="telefone">Telefone</option><option value="marca">Marca</option><option value="vigencia">Vigência</option><option value="cnpj">CNPJ</option><option value="contatos">Contatos</option><option value="situacao-cadastral">Situação cadastral</option><option value="endereco">Endereço</option><option value="responsavel">Responsável</option></select></div>
+                <div class="field"><label>Marca</label><select class="form-control" id="qualityBrand"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>
                 <div class="field"><label>Pesquisar</label><input class="form-control" id="qualitySearch" placeholder="Empresa, CNPJ ou cidade..." /></div>
               </div>
               <div class="table-wrap"><table class="workflow-table"><thead><tr><th>Concedente</th><th>Marca</th><th>Localização</th><th>Pendências</th><th>Ação</th></tr></thead><tbody id="qualityTableBody"></tbody></table></div>
@@ -3021,13 +3036,20 @@
           </section>`);
       }
 
+      const dashboardActions = $('#panel-dashboard .panel-header .panel-actions');
+      if (dashboardActions && !$('#dashboardBrandFilter')) {
+        dashboardActions.insertAdjacentHTML(
+          'afterbegin',
+          '<div class="workflow-brand-filter"><label for="dashboardBrandFilter">Marca</label><select class="form-control" id="dashboardBrandFilter"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>'
+        );
+      }
       if ($('#dashboardMetrics') && !$('#brandDashboardSummary')) {
         $('#dashboardMetrics').insertAdjacentHTML('afterend', '<div id="brandDashboardSummary" class="workflow-brand-grid"></div>');
       }
-      const recentCard = $('#recentActivities')?.closest('.card');
-      if (recentCard && !$('#backupDashboardMonitor')) {
-        recentCard.insertAdjacentHTML('afterend', '<div class="card" id="backupDashboardMonitor" data-admin-only style="margin-top:16px"></div>');
-      }
+      $('#recentActivities')?.closest('.card')?.remove();
+      $('#backupDashboardMonitor')?.remove();
+      const qualityNavIcon = $('.nav-item[data-panel="qualidade"] i');
+      if (qualityNavIcon) qualityNavIcon.className = 'fa-solid fa-circle-check';
 
       const companyGrid = $('#companyForm .form-grid');
       const brandField = $('#marcaConvenioGroup')?.closest('.field');
@@ -3145,13 +3167,14 @@
     renderDashboard = function() {
       baseRenderDashboardV860();
       renderBrandDashboard();
-      renderBackupDashboardMonitor();
     };
 
     function renderBrandDashboard() {
       const holder = $('#brandDashboardSummary');
       if (!holder) return;
-      holder.innerHTML = marcasConvenio.map((brand) => {
+      const selectedBrand = selectedBrandFilter('#dashboardBrandFilter');
+      const visibleBrands = selectedBrand ? [selectedBrand] : marcasConvenio;
+      holder.innerHTML = visibleBrands.map((brand) => {
         const rows = state.data.concedentes.map(normalizeCompany).filter((item) => item.marca === brand);
         const renewed = rows.filter((item) => item.situacao === 'Renovado').length;
         const pending = rows.filter((item) => !closedWorkflowStatuses.has(item.situacao)).length;
@@ -3242,10 +3265,12 @@
       if (!holder) return;
       const currentName = String(window.currentUser?.nome || '').trim();
       const scope = $('#queueScope')?.value || 'mine';
+      const brand = selectedBrandFilter('#queueBrand');
       const due = $('#queueDue')?.value || '';
       const priority = $('#queuePriority')?.value || '';
       const search = normalize($('#queueSearch')?.value || '');
       let rows = state.data.concedentes.map(normalizeCompany).filter((company) => !closedWorkflowStatuses.has(company.situacao));
+      if (brand) rows = rows.filter((company) => normalizeBrand(company.marca) === brand);
       if (scope === 'mine') rows = rows.filter((company) => normalize(company.responsavelOperacional) === normalize(currentName));
       if (scope === 'unassigned') rows = rows.filter((company) => !company.responsavelOperacional);
       if (due) rows = rows.filter((company) => workflowDateInfo(company).category === due);
@@ -3256,7 +3281,10 @@
         if (priorityCompare) return priorityCompare;
         return String(a.proximaData || '9999-12-31').localeCompare(String(b.proximaData || '9999-12-31'));
       });
-      const allOpen = state.data.concedentes.map(normalizeCompany).filter((company) => !closedWorkflowStatuses.has(company.situacao));
+      const allOpen = state.data.concedentes
+        .map(normalizeCompany)
+        .filter((company) => !closedWorkflowStatuses.has(company.situacao))
+        .filter((company) => !brand || normalizeBrand(company.marca) === brand);
       const metrics = [
         ['Atrasados',allOpen.filter((c)=>workflowDateInfo(c).category==='atrasado').length,'fa-triangle-exclamation'],
         ['Para hoje',allOpen.filter((c)=>workflowDateInfo(c).category==='hoje').length,'fa-calendar-day'],
@@ -3275,8 +3303,12 @@
       const holder = $('#qualityTableBody');
       if (!holder) return;
       const issueFilter = $('#qualityIssueFilter')?.value || '';
+      const brand = selectedBrandFilter('#qualityBrand');
       const search = normalize($('#qualitySearch')?.value || '');
-      const records = state.data.concedentes.map(normalizeCompany).map((company) => ({ company, issues: dataQualityIssues(company) }));
+      const records = state.data.concedentes
+        .map(normalizeCompany)
+        .filter((company) => !brand || normalizeBrand(company.marca) === brand)
+        .map((company) => ({ company, issues: dataQualityIssues(company) }));
       const withIssues = records.filter((item) => item.issues.length);
       const filtered = withIssues.filter((item) => {
         if (issueFilter && !item.issues.some((issue) => issue.key === issueFilter)) return false;
@@ -3475,10 +3507,11 @@
       $('#emailSentBtn')?.addEventListener('click', () => confirmOutlookEmail(true));
       $('#emailNotSentBtn')?.addEventListener('click', () => confirmOutlookEmail(false));
       $('#refreshEmailTemplates')?.addEventListener('click', () => loadEmailTemplates({ silent: false }));
-      ['queueScope','queueDue','queuePriority'].forEach((id)=>$('#'+id)?.addEventListener('change',renderWorkQueue));
+      ['queueScope','queueBrand','queueDue','queuePriority'].forEach((id)=>$('#'+id)?.addEventListener('change',renderWorkQueue));
       $('#queueSearch')?.addEventListener('input',renderWorkQueue);
-      $('#qualityIssueFilter')?.addEventListener('change',renderDataQuality);
+      ['qualityIssueFilter','qualityBrand'].forEach((id)=>$('#'+id)?.addEventListener('change',renderDataQuality));
       $('#qualitySearch')?.addEventListener('input',renderDataQuality);
+      $('#dashboardBrandFilter')?.addEventListener('change',renderDashboard);
       document.addEventListener('click', (event) => {
         const templateButton = event.target.closest?.('[data-edit-template]');
         if (templateButton) return openEmailTemplateEditor(templateButton.dataset.editTemplate);
@@ -3527,7 +3560,6 @@
       if (active === 'fila') renderWorkQueue();
       if (active === 'qualidade') renderDataQuality();
       renderEmailTemplatesSettings();
-      renderBackupDashboardMonitor();
     };
 
     const baseBuildBackupPayloadV860 = buildBackupPayload;
