@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.5.0" />
+  <meta name="app-version" content="8.5.1" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1327,7 +1327,14 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
     html[data-theme="dark"] .user-backend-warning { color: #fde68a; }
     html[data-theme="dark"] .user-backend-error { color: #fca5a5; }
 
-  </style>
+    /* V8.5.1 BRAND CHOICE */
+  .brand-choice-grid{grid-template-columns:repeat(2,minmax(150px,1fr));gap:10px}
+  .brand-choice{align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:12px}
+  .brand-choice span{display:grid;gap:3px}
+  .brand-choice strong{font-size:13px}
+  .brand-choice small{font-size:11px;color:var(--muted);font-weight:400}
+  #marcaConvenioGroup.invalid{outline:2px solid rgba(220,38,38,.35);outline-offset:3px;border-radius:12px}
+  @media(max-width:640px){.brand-choice-grid{grid-template-columns:1fr}}</style>
   <link rel="stylesheet" href="./css/style.css?v=8.4.0" />
 
 </head>
@@ -1592,7 +1599,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
               <div class="field"><label>Situação do contato</label><select class="form-control filter" id="filterSituacao"><option value="">Todas</option></select></div>
               <div class="field"><label>Estado</label><select class="form-control filter" id="filterEstado"><option value="">Todos</option></select></div>
               <div class="field"><label>Cidade</label><select class="form-control filter" id="filterCidade"><option value="">Todas</option></select></div>
-              <div class="field"><label>Polo</label><select class="form-control filter" id="filterPolo"><option value="">Todos</option></select></div>
+              <div class="field"><label>Polo</label><select class="form-control filter" id="filterPolo"><option value="">Todos</option></select></div><div class="field"><label>Marca</label><select class="form-control filter" id="filterMarca"><option value="">Todas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div>
               <div class="field"><label>Forma de contato</label><select class="form-control filter" id="filterForma"><option value="">Todas</option></select></div>
               <div class="field"><label>Vigência a partir de</label><input class="form-control filter" type="date" id="filterInicio" /></div>
               <div class="field"><label>Vigência até</label><input class="form-control filter" type="date" id="filterFim" /></div>
@@ -1603,14 +1610,14 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
           <div class="card table-card">
             <div class="table-meta"><span id="resultCount">0 resultados</span><label>Exibir <select class="form-control" id="pageSize" style="width:auto;display:inline-block;min-height:34px;padding:5px 28px 5px 8px"><option>10</option><option>25</option><option>50</option><option>100</option></select> por página</label></div>
             <div class="table-wrap"><table><thead><tr>
-              <th data-sort="situacaoVigencia">Situação da Vigência</th><th data-sort="cnpj">CNPJ</th><th data-sort="razaoSocial">Razão Social</th><th data-sort="nomeFantasia">Nome Fantasia</th><th data-sort="situacaoCadastral">Situação Cadastral</th><th data-sort="inicioVigencia">Início da Vigência</th><th data-sort="fimVigencia">Fim da Vigência</th><th data-sort="diasRestantes">Dias restantes</th><th data-sort="dataCadastro">Data do Cadastro</th><th data-sort="vigenciaResumo">Vigência</th><th data-sort="estado">Estado</th><th data-sort="cidade">Cidade</th><th data-sort="cep">CEP</th><th data-sort="email">E-mail</th><th data-sort="telefone">Telefone</th><th data-sort="polo">Polo</th><th data-sort="situacao">Situação</th><th data-sort="formasContato">Forma de Contato</th><th>Ações</th>
+              <th data-sort="situacaoVigencia">Situação da Vigência</th><th data-sort="cnpj">CNPJ</th><th data-sort="razaoSocial">Razão Social</th><th data-sort="nomeFantasia">Nome Fantasia</th><th data-sort="marca">Marca</th><th data-sort="situacaoCadastral">Situação Cadastral</th><th data-sort="inicioVigencia">Início da Vigência</th><th data-sort="fimVigencia">Fim da Vigência</th><th data-sort="diasRestantes">Dias restantes</th><th data-sort="dataCadastro">Data do Cadastro</th><th data-sort="vigenciaResumo">Vigência</th><th data-sort="estado">Estado</th><th data-sort="cidade">Cidade</th><th data-sort="cep">CEP</th><th data-sort="email">E-mail</th><th data-sort="telefone">Telefone</th><th data-sort="polo">Polo</th><th data-sort="situacao">Situação</th><th data-sort="formasContato">Forma de Contato</th><th>Ações</th>
             </tr></thead><tbody id="companiesTableBody"></tbody></table></div>
             <div class="pagination-bar"><span id="paginationInfo"></span><div class="pagination-controls" id="paginationControls"></div></div>
           </div>
         </section>
 
         <section class="panel" id="panel-renovacoes">
-          <div class="panel-header"><div><h2>Renovações</h2><p>Arraste os cartões entre as etapas. Use a roda do mouse ou arraste o fundo do quadro para rolar horizontalmente.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Nova concedente</button></div></div>
+          <div class="panel-header"><div><h2>Renovações</h2><p>Arraste os cartões entre as etapas. Para mover o quadro lateralmente, clique e arraste uma área vazia.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Nova concedente</button></div></div>
           <div class="kanban-wrap"><div class="kanban" id="kanbanBoard"></div></div>
         </section>
 
@@ -1808,7 +1815,20 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
             <div class="form-section-title span-3"><i class="fa-solid fa-address-book"></i><span>Contato e acompanhamento</span></div>
             <div class="field"><label>E-mail</label><input class="form-control api-fill-field" id="email" type="email" /></div>
             <div class="field"><label>Telefone</label><input class="form-control api-fill-field" id="telefone" inputmode="tel" maxlength="20" placeholder="(00) 00000-0000" /></div>
-            <div class="field"><label>Polo <span style="font-weight:400;color:var(--muted)">(opcional)</span></label><input class="form-control" id="polo" /></div>
+            <div class="field"><label>Polo <span style="font-weight:400;color:var(--muted)">(opcional)</span></label><input class="form-control" id="polo" /></div><div class="field span-2" id="marcaConvenioField">
+  <label>Marca do convênio <span class="required">*</span></label>
+  <div class="checkbox-grid brand-choice-grid" id="marcaConvenioGroup" role="radiogroup" aria-label="Marca do convênio">
+    <label class="check-option brand-choice">
+      <input type="radio" name="marcaConvenio" value="Uniasselvi" />
+      <span><strong>Uniasselvi</strong><small>Usar Uniasselvi nos recados</small></span>
+    </label>
+    <label class="check-option brand-choice">
+      <input type="radio" name="marcaConvenio" value="Unicesumar" />
+      <span><strong>Unicesumar</strong><small>Usar Unicesumar nos recados</small></span>
+    </label>
+  </div>
+  <span class="field-hint">Selecione uma única marca. Ela será aplicada automaticamente ao recado do Outlook.</span>
+</div>
             <div class="field"><label>Início da Vigência</label><input class="form-control vigencia-date" id="inicioVigencia" type="date" /></div>
             <div class="field"><label>Fim da Vigência</label><input class="form-control vigencia-date" id="fimVigencia" type="date" /></div>
             <div class="field"><label>Situação da Vigência</label><input class="form-control" id="situacaoVigencia" readonly /></div>
@@ -1963,7 +1983,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.5.0-outlook-standard-messages';
+    window.__CONVENIOS_BUILD__ = '8.5.1-company-brand-outlook';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -3306,6 +3326,7 @@ window.APP_CONFIG = Object.freeze({
       cnpj: row.cnpj || '',
       razaoSocial: row.razao_social || '',
       nomeFantasia: row.nome_fantasia || '',
+      marca: row.marca || '',
       dataAbertura: row.data_abertura || '',
       situacaoCadastral: row.situacao_cadastral || '',
       naturezaJuridica: row.natureza_juridica || '',
@@ -3340,6 +3361,7 @@ window.APP_CONFIG = Object.freeze({
       cnpj: nullable(company.cnpj),
       razao_social: String(company.razaoSocial || '').trim(),
       nome_fantasia: String(company.nomeFantasia || '').trim(),
+      marca: nullable(company.marca),
       data_abertura: nullable(company.dataAbertura),
       situacao_cadastral: nullable(company.situacaoCadastral),
       natureza_juridica: nullable(company.naturezaJuridica),
@@ -3410,29 +3432,63 @@ window.APP_CONFIG = Object.freeze({
     if (error.code === '42501' || normalized.includes('row-level security') || normalized.includes('permission denied')) {
       return new Error('Seu perfil não possui permissão para realizar esta ação.');
     }
+    if (
+      (error.code === 'PGRST204' || error.code === '42703' || normalized.includes('column'))
+      && normalized.includes('marca')
+    ) {
+      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo 1-EXECUTAR-NO-SUPABASE.sql e tente novamente.');
+    }
     return new Error(message);
   }
 
   async function listCompanies() {
     assertClient();
-    const { data, error } = await client
+
+    const contactsSelect = `
+      contatos (
+        id, data_contato, horario, responsavel, forma_contato,
+        pessoa_contatada, resultado_contato, proxima_acao,
+        proximo_contato, observacoes, criado_em, atualizado_em
+      )
+    `;
+
+    const currentSelect = `
+      id, cnpj, razao_social, nome_fantasia, marca, data_abertura, situacao_cadastral,
+      natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
+      fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
+      estado, cidade, cep, email, telefone, polo, situacao,
+      formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
+      ${contactsSelect}
+    `;
+
+    let result = await client
       .from('concedentes')
-      .select(`
-        id, cnpj, razao_social, nome_fantasia, data_abertura, situacao_cadastral,
-        natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
-        fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
-        estado, cidade, cep, email, telefone, polo, situacao,
-        formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
-        contatos (
-          id, data_contato, horario, responsavel, forma_contato,
-          pessoa_contatada, resultado_contato, proxima_acao,
-          proximo_contato, observacoes, criado_em, atualizado_em
-        )
-      `)
+      .select(currentSelect)
       .order('atualizado_em', { ascending: false });
 
-    if (error) throw databaseError(error, 'Não foi possível carregar as concedentes.');
-    return (data || []).map(companyFromDatabase);
+    const missingBrandColumn = result.error && (
+      result.error.code === 'PGRST204'
+      || result.error.code === '42703'
+      || String(result.error.message || '').toLowerCase().includes('marca')
+    );
+
+    if (missingBrandColumn) {
+      console.warn('[Dados] A coluna marca ainda não existe. Carregando os cadastros no modo compatível.');
+      result = await client
+        .from('concedentes')
+        .select(`
+          id, cnpj, razao_social, nome_fantasia, data_abertura, situacao_cadastral,
+          natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
+          fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
+          estado, cidade, cep, email, telefone, polo, situacao,
+          formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
+          ${contactsSelect}
+        `)
+        .order('atualizado_em', { ascending: false });
+    }
+
+    if (result.error) throw databaseError(result.error, 'Não foi possível carregar as concedentes.');
+    return (result.data || []).map(companyFromDatabase);
   }
 
   async function createCompany(company, { preserveId = false } = {}) {
@@ -3682,7 +3738,7 @@ window.APP_CONFIG = Object.freeze({
     logradouro: 'Logradouro', numero: 'Número', complemento: 'Complemento', bairro: 'Bairro', fonte_cnpj: 'Fonte do CNPJ',
     consultado_em: 'Data da consulta do CNPJ', inicio_vigencia: 'Início da Vigência', fim_vigencia: 'Fim da Vigência',
     data_cadastro: 'Data do Cadastro', estado: 'Estado', cidade: 'Cidade', cep: 'CEP', email: 'E-mail', telefone: 'Telefone',
-    polo: 'Polo', situacao: 'Situação', formas_contato: 'Formas de Contato', observacoes: 'Observações',
+    marca: 'Marca do convênio', polo: 'Polo', situacao: 'Situação', formas_contato: 'Formas de Contato', observacoes: 'Observações',
     demonstracao: 'Registro de demonstração', concedente_id: 'Concedente', data_contato: 'Data do Contato', horario: 'Horário',
     responsavel: 'Responsável', forma_contato: 'Forma de Contato', pessoa_contatada: 'Pessoa Contatada',
     resultado_contato: 'Resultado do Contato', proxima_acao: 'Próxima Ação', proximo_contato: 'Próximo Contato',
@@ -5299,6 +5355,7 @@ window.APP_CONFIG = Object.freeze({
     const kanbanStages = ['Não contatado','Contato iniciado','Aguardando retorno','Documentação solicitada','Documentação recebida','Em análise','Renovação em andamento','Renovado'];
     const formasContato = ['Telefone','WhatsApp','E-mail','Visita presencial','Videoconferência','Instagram','Outro'];
     const situacoesVigencia = ['Vigente','Próximo do vencimento','Vencimento crítico','Vencido','Sem vigência informada'];
+    const marcasConvenio = Object.freeze(['Uniasselvi','Unicesumar']);
 
     const $ = (sel, root = document) => root.querySelector(sel);
     const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -5314,6 +5371,12 @@ window.APP_CONFIG = Object.freeze({
     const escapeHTML = (value = '') => String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
     const onlyDigits = (value = '') => String(value).replace(/\D/g, '');
     const normalize = (value = '') => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    function normalizeBrand(value = '') {
+      const key = normalize(value).replace(/[^a-z]/g, '');
+      if (key === 'uniasselvi') return 'Uniasselvi';
+      if (key === 'unicesumar') return 'Unicesumar';
+      return '';
+    }
     const daysBetween = (a, b) => Math.ceil((b - a) / 86400000);
     const monthDiff = (start, end) => {
       if (!start || !end) return 0;
@@ -5420,7 +5483,7 @@ window.APP_CONFIG = Object.freeze({
           id: uid(), data: addDaysISO(-Math.max(2, 12-i)), horario: i % 2 ? '14:30' : '09:15', responsavel: i % 2 ? 'Mariana Costa' : 'Lucas Ferreira', forma: formas[0], pessoa: 'Responsável administrativo', resultado: situacao, proximaAcao: situacao === 'Renovado' ? 'Arquivar documentação' : 'Enviar lembrete e solicitar retorno', proximaData: situacao === 'Renovado' ? '' : addDaysISO(7-i), observacoes: 'Contato fictício criado para demonstração do histórico.'
         }] : [];
         return normalizeCompany({
-          id: uid(), cnpj, razaoSocial, nomeFantasia, inicioVigencia: addDaysISO(startOffset), fimVigencia: endOffset === null ? '' : addDaysISO(endOffset), dataCadastro: addDaysISO(-60+i*3), estado, cidade, cep: ['40000-000','50000-000','13000-000','59000-000','58900-000','57000-000','38000-000','66000-000','64000-000','60000-000','74000-000','88000-000'][i], email: `contato${i+1}@empresa-ficticia.com.br`, telefone: i % 2 ? '(81) 98888-0000' : '(71) 3333-0000', polo, situacao, formasContato: formas, observacoes: 'Registro fictício para demonstração do sistema.', contatos, demo: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+          id: uid(), cnpj, razaoSocial, nomeFantasia, marca: i % 2 ? 'Unicesumar' : 'Uniasselvi', inicioVigencia: addDaysISO(startOffset), fimVigencia: endOffset === null ? '' : addDaysISO(endOffset), dataCadastro: addDaysISO(-60+i*3), estado, cidade, cep: ['40000-000','50000-000','13000-000','59000-000','58900-000','57000-000','38000-000','66000-000','64000-000','60000-000','74000-000','88000-000'][i], email: `contato${i+1}@empresa-ficticia.com.br`, telefone: i % 2 ? '(81) 98888-0000' : '(71) 3333-0000', polo, situacao, formasContato: formas, observacoes: 'Registro fictício para demonstração do sistema.', contatos, demo: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         });
       });
     }
@@ -5431,6 +5494,7 @@ window.APP_CONFIG = Object.freeze({
         cnpj: maskCNPJ(company.cnpj || ''),
         razaoSocial: company.razaoSocial || '',
         nomeFantasia: company.nomeFantasia || '',
+        marca: normalizeBrand(company.marca || company.brand || ''),
         dataAbertura: company.dataAbertura || '',
         situacaoCadastral: company.situacaoCadastral || '',
         naturezaJuridica: company.naturezaJuridica || '',
@@ -5652,19 +5716,21 @@ window.APP_CONFIG = Object.freeze({
       setOptions('#filterEstado',state.data.concedentes.map(c=>c.estado),$('#filterEstado').value);
       setOptions('#filterCidade',state.data.concedentes.map(c=>c.cidade),$('#filterCidade').value);
       setOptions('#filterPolo',state.data.concedentes.map(c=>c.polo),$('#filterPolo').value);
+      setOptions('#filterMarca',state.data.concedentes.map(c=>c.marca),$('#filterMarca')?.value || '');
     }
     function getFilteredCompanies() {
       const q = normalize($('#tableSearch').value);
-      const filters = { vigencia:$('#filterVigencia').value, situacao:$('#filterSituacao').value, estado:$('#filterEstado').value, cidade:$('#filterCidade').value, polo:$('#filterPolo').value, forma:$('#filterForma').value, inicio:$('#filterInicio').value, fim:$('#filterFim').value, rapido:$('#filterRapido').value };
+      const filters = { vigencia:$('#filterVigencia').value, situacao:$('#filterSituacao').value, estado:$('#filterEstado').value, cidade:$('#filterCidade').value, polo:$('#filterPolo').value, marca:$('#filterMarca')?.value || '', forma:$('#filterForma').value, inicio:$('#filterInicio').value, fim:$('#filterFim').value, rapido:$('#filterRapido').value };
       const now = parseDate(todayISO());
       return state.data.concedentes.map(normalizeCompany).filter(c=>{
-        const hay = normalize([c.cnpj,c.razaoSocial,c.nomeFantasia,c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.cep,c.email,c.telefone,c.polo,c.situacao,c.formasContato.join(' '),c.observacoes].join(' '));
+        const hay = normalize([c.cnpj,c.razaoSocial,c.nomeFantasia,c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.cep,c.email,c.telefone,c.polo,c.marca,c.situacao,c.formasContato.join(' '),c.observacoes].join(' '));
         if (q && !hay.includes(q)) return false;
         if (filters.vigencia && c.situacaoVigencia !== filters.vigencia) return false;
         if (filters.situacao && c.situacao !== filters.situacao) return false;
         if (filters.estado && c.estado !== filters.estado) return false;
         if (filters.cidade && c.cidade !== filters.cidade) return false;
         if (filters.polo && c.polo !== filters.polo) return false;
+        if (filters.marca && c.marca !== filters.marca) return false;
         if (filters.forma && !c.formasContato.includes(filters.forma)) return false;
         if (filters.inicio && (!c.inicioVigencia || c.inicioVigencia < filters.inicio)) return false;
         if (filters.fim && (!c.fimVigencia || c.fimVigencia > filters.fim)) return false;
@@ -5703,9 +5769,9 @@ window.APP_CONFIG = Object.freeze({
       $('#resultCount').textContent = `${total} ${total===1?'resultado':'resultados'}`;
       $('#paginationInfo').textContent = total ? `Exibindo ${start+1} a ${Math.min(start+state.pageSize,total)} de ${total}` : 'Nenhum registro encontrado';
       $('#companiesTableBody').innerHTML = rows.length ? rows.map(c=>`<tr>
-        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${escapeHTML(c.situacaoCadastral||'—')}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
+        <td>${badgeForVigencia(c.situacaoVigencia)}</td><td>${escapeHTML(c.cnpj||'—')}</td><td class="td-truncate" title="${escapeHTML(c.razaoSocial)}">${escapeHTML(c.razaoSocial)}</td><td>${escapeHTML(c.nomeFantasia)}</td><td>${escapeHTML(c.marca||'—')}</td><td>${escapeHTML(c.situacaoCadastral||'—')}</td><td>${formatDate(c.inicioVigencia)}</td><td>${formatDate(c.fimVigencia)}</td><td>${daysRemainingBadge(c.diasRestantes)}</td><td>${formatDate(c.dataCadastro)}</td><td>${escapeHTML(c.vigenciaResumo)}</td><td>${escapeHTML(c.estado)}</td><td>${escapeHTML(c.cidade)}</td><td>${escapeHTML(c.cep||'—')}</td><td>${escapeHTML(c.email||'—')}</td><td>${escapeHTML(c.telefone||'—')}</td><td>${escapeHTML(c.polo)}</td><td>${badgeForSituacao(c.situacao)}</td><td>${escapeHTML(c.formasContato.join(', ')||'—')}</td>
         <td><div class="actions-cell"><button class="btn btn-secondary btn-icon action-view" data-id="${c.id}" title="Visualizar"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary btn-icon action-edit" data-id="${c.id}" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="btn btn-secondary btn-icon action-contact" data-id="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button><button class="btn btn-secondary btn-icon action-renew" data-id="${c.id}" title="Marcar como renovado"><i class="fa-solid fa-circle-check"></i></button><button class="btn btn-secondary btn-icon action-duplicate" data-id="${c.id}" title="Duplicar"><i class="fa-solid fa-copy"></i></button><button class="btn btn-danger btn-icon action-delete" data-id="${c.id}" title="Excluir"><i class="fa-solid fa-trash"></i></button></div></td>
-      </tr>`).join('') : `<tr><td colspan="19">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
+      </tr>`).join('') : `<tr><td colspan="20">${emptyState('Nenhum cadastro encontrado','Ajuste os filtros ou cadastre uma nova concedente.')}</td></tr>`;
       renderPagination(pages); bindTableActions();
     }
     function renderPagination(pages) {
@@ -5762,6 +5828,8 @@ window.APP_CONFIG = Object.freeze({
       $('#dataCadastro').value = todayISO();
       $('#situacao').value = 'Não contatado';
       $('#estado').value = '';
+      $$('input[name="marcaConvenio"]').forEach((input) => { input.checked = false; });
+      $('#marcaConvenioGroup')?.classList.remove('invalid');
       $$('#companyForm .invalid').forEach((element) => element.classList.remove('invalid'));
       resetCnpjLookupState();
       updateVigenciaForm();
@@ -5984,6 +6052,9 @@ window.APP_CONFIG = Object.freeze({
           'cep','email','telefone','polo','situacao','observacoes'
         ].forEach((key) => { const field = $('#' + key); if (field) field.value = company[key] || ''; });
         $$('input[name="formasContato"]').forEach((checkbox) => { checkbox.checked = (company.formasContato || []).includes(checkbox.value); });
+        $$('input[name="marcaConvenio"]').forEach((input) => {
+          input.checked = normalizeBrand(company.marca) === input.value;
+        });
         const form = $('#companyForm');
         if (form) {
           form.dataset.fonteCnpj = company.fonteCnpj || '';
@@ -6059,6 +6130,7 @@ window.APP_CONFIG = Object.freeze({
         email: $('#email').value.trim(),
         telefone: $('#telefone').value,
         polo: $('#polo').value.trim(),
+        marca: document.querySelector('input[name="marcaConvenio"]:checked')?.value || '',
         situacao: $('#situacao').value,
         formasContato: $$('input[name="formasContato"]:checked').map((item) => item.value),
         observacoes: $('#observacoes').value.trim()
@@ -6073,6 +6145,10 @@ window.APP_CONFIG = Object.freeze({
         if (!element.value.trim()) { element.classList.add('invalid'); valid = false; }
       });
       if (data.estado.length !== 2) { $('#estado').classList.add('invalid'); valid = false; }
+      if (!normalizeBrand(data.marca)) {
+        $('#marcaConvenioGroup')?.classList.add('invalid');
+        valid = false;
+      }
       if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { $('#email').classList.add('invalid'); valid = false; }
       if (data.cnpj && !cnpjValidLength(data.cnpj)) {
         $('#cnpj').classList.add('invalid'); valid = false;
@@ -6120,6 +6196,7 @@ window.APP_CONFIG = Object.freeze({
         ['CNPJ', escapeHTML(company.cnpj || '—')],
         ['Razão Social', escapeHTML(company.razaoSocial)],
         ['Nome Fantasia', escapeHTML(company.nomeFantasia)],
+        ['Marca do convênio', escapeHTML(company.marca || '—')],
         ['Situação cadastral', escapeHTML(company.situacaoCadastral || '—')],
         ['Data de abertura', formatDate(company.dataAbertura)],
         ['Natureza jurídica', escapeHTML(company.naturezaJuridica || '—')],
@@ -6266,7 +6343,7 @@ window.APP_CONFIG = Object.freeze({
       return `<div class="timeline">${contacts.map(c=>`<div class="timeline-item"><div class="timeline-card"><div class="timeline-head"><strong>${escapeHTML(c.resultado)}</strong><div class="timeline-head-actions"><span>${formatDateTime(c.data,c.horario)}</span>${canEdit()?`<button class="btn btn-sm btn-secondary timeline-edit-contact" type="button" data-edit-contact="${c.id}" data-company-id="${company.id}" title="Editar contato"><i class="fa-solid fa-pen"></i></button>`:''}</div></div><div class="timeline-grid"><div><span>Responsável:</span> ${escapeHTML(c.responsavel)}</div><div><span>Forma:</span> ${escapeHTML(c.forma)}</div><div><span>Pessoa contatada:</span> ${escapeHTML(c.pessoa||'—')}</div><div><span>Próxima ação:</span> ${escapeHTML(c.proximaAcao||'—')}</div><div><span>Próximo contato:</span> ${formatDate(c.proximaData)}</div></div>${c.observacoes?`<div class="timeline-notes">${escapeHTML(c.observacoes)}</div>`:''}</div></div>`).join('')}</div>`;
     }
 
-    // V8.5.0: recados padronizados preparados no Outlook Web.
+    // V8.5.1: recados usam automaticamente a marca salva no cadastro.
     const outlookMessageStatuses = Object.freeze({
       'Não contatado': 'nao-contatado',
       'Aguardando retorno': 'aguardando-retorno',
@@ -6381,17 +6458,9 @@ window.APP_CONFIG = Object.freeze({
                       <input id="outlookMessageSituation" type="text" readonly>
                     </div>
                     <div class="form-group full">
-                      <label>Marca <span class="required">*</span></label>
-                      <div style="display:flex;flex-wrap:wrap;gap:10px">
-                        <label class="check-option" style="min-width:170px">
-                          <input type="radio" name="outlookMessageBrand" value="Uniasselvi">
-                          Uniasselvi
-                        </label>
-                        <label class="check-option" style="min-width:170px">
-                          <input type="radio" name="outlookMessageBrand" value="Unicesumar">
-                          Unicesumar
-                        </label>
-                      </div>
+                      <label>Marca do convênio</label>
+                      <input id="outlookMessageBrand" type="text" readonly>
+                      <small>A marca foi definida no cadastro da concedente e será aplicada automaticamente ao recado.</small>
                     </div>
                     <div class="form-group full">
                       <label>Destinatário <span class="required">*</span></label>
@@ -6408,7 +6477,7 @@ window.APP_CONFIG = Object.freeze({
                     </div>
                   </div>
                   <div id="outlookMessageValidation" class="summary-box" style="margin-top:14px">
-                    Selecione a marca para gerar o recado.
+                    A marca do convênio será carregada automaticamente do cadastro.
                   </div>
                 </div>
                 <div class="modal-footer">
@@ -6459,7 +6528,10 @@ window.APP_CONFIG = Object.freeze({
     }
 
     function selectedOutlookBrand() {
-      return document.querySelector('input[name="outlookMessageBrand"]:checked')?.value || '';
+      const company = state.data.concedentes.find(
+        (item) => item.id === $('#outlookMessageCompanyId')?.value
+      );
+      return normalizeBrand(company?.marca);
     }
 
     function refreshOutlookMessagePreview() {
@@ -6487,7 +6559,7 @@ window.APP_CONFIG = Object.freeze({
       if (submit) submit.disabled = !(brandOk && recipientOk && draftOk);
 
       if (!brandOk) {
-        setOutlookMessageValidation('Selecione Uniasselvi ou Unicesumar para preencher o recado.');
+        setOutlookMessageValidation('A concedente não possui marca definida. Edite o cadastro e selecione Uniasselvi ou Unicesumar.', 'error');
       } else if (!recipientOk) {
         setOutlookMessageValidation('Informe um endereço de e-mail válido para continuar.', 'error');
       } else {
@@ -6513,17 +6585,25 @@ window.APP_CONFIG = Object.freeze({
         return;
       }
 
+      if (!normalizeBrand(company.marca)) {
+        toast(
+          'warning',
+          'Marca não informada',
+          'Edite a concedente e selecione Uniasselvi ou Unicesumar antes de preparar o recado.'
+        );
+        openCompanyForm(company.id);
+        setTimeout(() => document.querySelector('input[name="marcaConvenio"]')?.focus(), 120);
+        return;
+      }
+
       $('#outlookMessageCompanyId').value = company.id;
       $('#outlookMessageCompany').value = outlookLocalName(company);
       $('#outlookMessageSituation').value = company.situacao || '';
+      $('#outlookMessageBrand').value = normalizeBrand(company.marca);
       $('#outlookMessageRecipient').value = primaryCompanyEmail(company.email);
       $('#outlookMessageSubject').value = '';
       $('#outlookMessageBody').value = '';
-      $('#outlookMessageModalSubtitle').textContent = `${outlookLocalName(company)} • ${company.situacao}`;
-
-      document.querySelectorAll('input[name="outlookMessageBrand"]').forEach((input) => {
-        input.checked = false;
-      });
+      $('#outlookMessageModalSubtitle').textContent = `${outlookLocalName(company)} • ${company.situacao} • ${company.marca}`;
 
       refreshOutlookMessagePreview();
       openModal('outlookMessageModalBackdrop');
@@ -6556,7 +6636,7 @@ window.APP_CONFIG = Object.freeze({
       }
 
       if (!brand) {
-        setOutlookMessageValidation('Selecione Uniasselvi ou Unicesumar.', 'error');
+        setOutlookMessageValidation('A marca não está definida no cadastro da concedente.', 'error');
         return;
       }
 
@@ -6597,13 +6677,13 @@ window.APP_CONFIG = Object.freeze({
 
     function renderContactsPanel() {
       const q=normalize($('#contactCompanySearch').value); const companies=state.data.concedentes.filter(c=>normalize(`${c.nomeFantasia} ${c.razaoSocial} ${c.cnpj} ${c.cidade}`).includes(q)).sort((a,b)=>(a.nomeFantasia||a.razaoSocial).localeCompare(b.nomeFantasia||b.razaoSocial,'pt-BR'));
-      $('#contactCompanyList').innerHTML=companies.length?companies.map(c=>`<div class="contact-company-item ${state.selectedContactCompanyId===c.id?'active':''}" data-id="${c.id}"><strong>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</strong><small>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)} • ${c.contatos.length} contato(s)</small></div>`).join(''):emptyState('Nenhuma concedente encontrada','Ajuste a pesquisa.');
+      $('#contactCompanyList').innerHTML=companies.length?companies.map(c=>`<div class="contact-company-item ${state.selectedContactCompanyId===c.id?'active':''}" data-id="${c.id}"><strong>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</strong><small>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)} • ${escapeHTML(c.marca||'Sem marca')} • ${c.contatos.length} contato(s)</small></div>`).join(''):emptyState('Nenhuma concedente encontrada','Ajuste a pesquisa.');
       $$('.contact-company-item').forEach(el=>el.onclick=()=>{state.selectedContactCompanyId=el.dataset.id;renderContactsPanel();});
       const c=state.data.concedentes.find(x=>x.id===state.selectedContactCompanyId);
       const outlookButton = $('#prepareOutlookSelected');
       if(c){
         $('#contactTimelineTitle').textContent=c.nomeFantasia||c.razaoSocial;
-        $('#contactTimelineSubtitle').textContent=`${c.cnpj||'Sem CNPJ'} • ${c.cidade}/${c.estado}`;
+        $('#contactTimelineSubtitle').textContent=`${c.cnpj||'Sem CNPJ'} • ${c.cidade}/${c.estado} • ${c.marca||'Sem marca'}`;
         $('#addContactSelected').classList.remove('hidden');
         if(outlookButton){
           outlookButton.dataset.companyId=c.id;
@@ -6626,7 +6706,7 @@ window.APP_CONFIG = Object.freeze({
     }
 
     function renderKanban() {
-      $('#kanbanBoard').innerHTML=kanbanStages.map(stage=>{const companies=state.data.concedentes.filter(c=>c.situacao===stage);return `<section class="kanban-column" data-stage="${stage}"><div class="kanban-head"><strong>${stage}</strong><span class="kanban-count">${companies.length}</span></div><div class="kanban-list">${companies.map(c=>{const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia);const lc=latestContact(c);return `<article class="kanban-card" draggable="true" data-id="${c.id}"><h4>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</h4><div class="company-name">${escapeHTML(c.razaoSocial)}</div><div class="kanban-info"><div>CNPJ<strong>${escapeHTML(c.cnpj||'—')}</strong></div><div>Localização<strong>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)}</strong></div><div>Polo<strong>${escapeHTML(c.polo)}</strong></div><div>Fim da vigência<strong>${formatDate(c.fimVigencia)}</strong></div><div>Dias restantes<strong>${info.days===null?'—':info.days}</strong></div><div>Último contato<strong>${lc?formatDate(lc.data):'—'}</strong></div></div><div class="kanban-footer"><span class="badge ${info.days!==null&&info.days<0?'badge-danger':info.days!==null&&info.days<=30?'badge-orange':'badge-muted'}">${info.days===null?'Sem data':info.days<0?'Vencido':`${info.days} dias`}</span><div style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" data-kanban-contact="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button>${supportsStandardOutlookMessage(c)?`<button class="btn btn-sm btn-secondary" data-kanban-outlook="${c.id}" title="Preparar recado no Outlook"><i class="fa-solid fa-envelope"></i></button>`:''}</div></div>${lc&&lc.proximaAcao?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Próxima ação: ${escapeHTML(lc.proximaAcao)}</div>`:''}</article>`;}).join('')}</div></section>`;}).join('');
+      $('#kanbanBoard').innerHTML=kanbanStages.map(stage=>{const companies=state.data.concedentes.filter(c=>c.situacao===stage);return `<section class="kanban-column" data-stage="${stage}"><div class="kanban-head"><strong>${stage}</strong><span class="kanban-count">${companies.length}</span></div><div class="kanban-list">${companies.map(c=>{const info=vigenciaInfo(c.inicioVigencia,c.fimVigencia);const lc=latestContact(c);return `<article class="kanban-card" draggable="true" data-id="${c.id}"><h4>${escapeHTML(c.nomeFantasia||c.razaoSocial)}</h4><div class="company-name">${escapeHTML(c.razaoSocial)}</div><div class="kanban-info"><div>CNPJ<strong>${escapeHTML(c.cnpj||'—')}</strong></div><div>Localização<strong>${escapeHTML(c.cidade)}/${escapeHTML(c.estado)}</strong></div><div>Polo<strong>${escapeHTML(c.polo||'—')}</strong></div><div>Marca<strong>${escapeHTML(c.marca||'—')}</strong></div><div>Fim da vigência<strong>${formatDate(c.fimVigencia)}</strong></div><div>Dias restantes<strong>${info.days===null?'—':info.days}</strong></div><div>Último contato<strong>${lc?formatDate(lc.data):'—'}</strong></div></div><div class="kanban-footer"><span class="badge ${info.days!==null&&info.days<0?'badge-danger':info.days!==null&&info.days<=30?'badge-orange':'badge-muted'}">${info.days===null?'Sem data':info.days<0?'Vencido':`${info.days} dias`}</span><div style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" data-kanban-contact="${c.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button>${supportsStandardOutlookMessage(c)?`<button class="btn btn-sm btn-secondary" data-kanban-outlook="${c.id}" title="Preparar recado no Outlook"><i class="fa-solid fa-envelope"></i></button>`:''}</div></div>${lc&&lc.proximaAcao?`<div style="font-size:10px;color:var(--muted);margin-top:8px">Próxima ação: ${escapeHTML(lc.proximaAcao)}</div>`:''}</article>`;}).join('')}</div></section>`;}).join('');
       $$('.kanban-card').forEach(card=>{card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',card.dataset.id);card.style.opacity='.55';});card.addEventListener('dragend',()=>card.style.opacity='1');});
       $$('.kanban-column').forEach(col=>{col.addEventListener('dragover',e=>{if(!canEdit())return;e.preventDefault();col.classList.add('drag-over');});col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drag-over');if(!canEdit()){toast('error','Acesso restrito','Seu perfil não pode movimentar o Kanban.');return;}const id=e.dataTransfer.getData('text/plain');const c=state.data.concedentes.find(x=>x.id===id);if(c&&c.situacao!==col.dataset.stage){const previous=c.situacao;c.situacao=col.dataset.stage;renderAll();applyAccessRules();try{await window.remoteData.updateCompanyStatus(id,col.dataset.stage,c.formasContato);toast('success','Etapa atualizada',`O cartão foi movido para “${col.dataset.stage}”.`);}catch(error){c.situacao=previous;renderAll();applyAccessRules();toast('error','Falha ao mover cartão',error.message||'Não foi possível atualizar a etapa.');}}});});
       $$('[data-kanban-contact]').forEach(b=>b.onclick=e=>{e.stopPropagation();openContactForm(b.dataset.kanbanContact);});
@@ -6726,9 +6806,9 @@ window.APP_CONFIG = Object.freeze({
     }
     function refreshChartsIfVisible(){setTimeout(()=>{const active=$('.panel.active')?.id;if(active==='panel-dashboard')renderDashboard();if(active==='panel-relatorios')renderReports();},30);}
 
-    const CSV_HEADERS = ['Situação da Vigência','CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral','Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro','Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone','Polo','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro','Vigência','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ','Observações'];
+    const CSV_HEADERS = ['Situação da Vigência','CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral','Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro','Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone','Polo','Início da Vigência','Fim da Vigência','Dias restantes','Data do Cadastro','Vigência','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ','Observações'];
     function csvEscape(value){const s=String(value??'').replace(/"/g,'""');return /[;"\n\r]/.test(s)?`"${s}"`:s;}
-    function companyToCsvRow(c){return [c.situacaoVigencia,c.cnpj,c.razaoSocial,c.nomeFantasia,formatDate(c.dataAbertura),c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.cep,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.email,c.telefone,c.polo,formatDate(c.inicioVigencia),formatDate(c.fimVigencia),c.diasRestantes??'',formatDate(c.dataCadastro),c.vigenciaResumo,c.situacao,c.formasContato.join(', '),c.fonteCnpj,c.consultadoEm?new Date(c.consultadoEm).toLocaleString('pt-BR'):'',c.observacoes];}
+    function companyToCsvRow(c){return [c.situacaoVigencia,c.cnpj,c.razaoSocial,c.nomeFantasia,c.marca,formatDate(c.dataAbertura),c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.cep,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.email,c.telefone,c.polo,formatDate(c.inicioVigencia),formatDate(c.fimVigencia),c.diasRestantes??'',formatDate(c.dataCadastro),c.vigenciaResumo,c.situacao,c.formasContato.join(', '),c.fonteCnpj,c.consultadoEm?new Date(c.consultadoEm).toLocaleString('pt-BR'):'',c.observacoes];}
 
     function formatBytes(bytes) {
       const value = Number(bytes || 0);
@@ -7161,6 +7241,7 @@ window.APP_CONFIG = Object.freeze({
       cnpj: ['cnpj'],
       razaoSocial: ['razaosocial','razao','nomerazao'],
       nomeFantasia: ['nomefantasia','fantasia'],
+      marca: ['marca','marcadoconvenio','instituicao','ies'],
       dataAbertura: ['datadeabertura','dataabertura','abertura'],
       situacaoCadastral: ['situacaocadastral','statuscadastral'],
       naturezaJuridica: ['naturezajuridica'],
@@ -7232,6 +7313,7 @@ window.APP_CONFIG = Object.freeze({
           cnpj: importCellText(raw('cnpj')),
           razaoSocial: importCellText(raw('razaoSocial')),
           nomeFantasia: importCellText(raw('nomeFantasia')),
+          marca: normalizeBrand(importCellText(raw('marca'))),
           dataAbertura: importDateToISO(raw('dataAbertura')),
           situacaoCadastral: importCellText(raw('situacaoCadastral')),
           naturezaJuridica: importCellText(raw('naturezaJuridica')),
@@ -7324,6 +7406,9 @@ window.APP_CONFIG = Object.freeze({
         );
       });
 
+      if (!company.marca) {
+        warnings.push('Marca não informada — selecione Uniasselvi ou Unicesumar após a importação');
+      }
       if (!company.cnaePrincipal) {
         warnings.push(
           pendingLookup
@@ -7351,7 +7436,7 @@ window.APP_CONFIG = Object.freeze({
         ['Total', total, ''], ['Prontas', valid, 'is-valid'], ['Com avisos', warnings, 'is-warning'], ['Com erros', errors, 'is-error'], ['Duplicadas', duplicates, 'is-warning']
       ].map(([label, value, className]) => `<div class="import-summary-card ${className}"><strong>${value}</strong><span>${label}</span></div>`).join('');
       const preview = $('#importPreview');
-      if (preview) preview.innerHTML = total ? `<table><thead><tr><th>Linha</th><th>Status</th><th>CNPJ</th><th>Razão Social</th><th>Nome Fantasia</th><th>UF</th><th>Cidade</th><th>Polo</th><th>Vigência final</th><th>Observações da validação</th></tr></thead><tbody>${state.importRows.slice(0, 100).map((entry) => {
+      if (preview) preview.innerHTML = total ? `<table><thead><tr><th>Linha</th><th>Status</th><th>CNPJ</th><th>Razão Social</th><th>Nome Fantasia</th><th>Marca</th><th>UF</th><th>Cidade</th><th>Polo</th><th>Vigência final</th><th>Observações da validação</th></tr></thead><tbody>${state.importRows.slice(0, 100).map((entry) => {
         const status = entry.processing
           ? ['warning', 'Consultando']
           : entry.issues.length
@@ -7363,7 +7448,7 @@ window.APP_CONFIG = Object.freeze({
           ? 'Consultando dados públicos do CNPJ…'
           : [...entry.issues, ...entry.warnings].join(' • ') || 'Linha validada';
         const company = entry.company;
-        return `<tr><td>${entry.rowNumber}</td><td><span class="import-row-status ${status[0]}">${status[1]}</span></td><td>${escapeHTML(company.cnpj || '—')}</td><td>${escapeHTML(company.razaoSocial || '—')}</td><td>${escapeHTML(company.nomeFantasia || '—')}</td><td>${escapeHTML(company.estado || '—')}</td><td>${escapeHTML(company.cidade || '—')}</td><td>${escapeHTML(company.polo || '—')}</td><td>${formatDate(company.fimVigencia)}</td><td>${escapeHTML(notes)}</td></tr>`;
+        return `<tr><td>${entry.rowNumber}</td><td><span class="import-row-status ${status[0]}">${status[1]}</span></td><td>${escapeHTML(company.cnpj || '—')}</td><td>${escapeHTML(company.razaoSocial || '—')}</td><td>${escapeHTML(company.nomeFantasia || '—')}</td><td>${escapeHTML(company.marca || '—')}</td><td>${escapeHTML(company.estado || '—')}</td><td>${escapeHTML(company.cidade || '—')}</td><td>${escapeHTML(company.polo || '—')}</td><td>${formatDate(company.fimVigencia)}</td><td>${escapeHTML(notes)}</td></tr>`;
       }).join('')}</tbody></table>${total > 100 ? `<div class="summary-box">A prévia mostra as primeiras 100 linhas de ${total}.</div>` : ''}` : '<div class="empty-state"><i class="fa-solid fa-table"></i><strong>Nenhuma linha identificada</strong><span>Confira a planilha ou use o modelo recomendado.</span></div>';
       const confirm = $('#confirmImport');
       if (confirm) {
@@ -7562,7 +7647,7 @@ window.APP_CONFIG = Object.freeze({
     }
 
     const IMPORT_TEMPLATE_HEADERS = [
-      'CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral',
+      'CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral',
       'Natureza Jurídica','CNAE Principal (código e descrição)','CEP','Logradouro',
       'Número','Complemento','Bairro','Estado','Cidade','E-mail','Telefone',
       'Polo (opcional)','Início da Vigência','Fim da Vigência','Data do Cadastro',
@@ -7573,6 +7658,7 @@ window.APP_CONFIG = Object.freeze({
       const instructions = [
         ['Campo','Orientação','Obrigatório?'],
         ['CNPJ','Pode ser a única informação preenchida quando a complementação por CNPJ estiver ativada.','Sim para consulta automática'],
+        ['Marca','Selecione Uniasselvi ou Unicesumar. A marca será usada automaticamente nos recados do Outlook.','Sim para os recados'],
         ['CNAE','O sistema grava o código junto da descrição quando a fonte pública disponibilizar.','Não'],
         ['Polo','Campo opcional. Pode permanecer vazio.','Não'],
         ['Datas','Use DD/MM/AAAA ou uma data válida do Excel.','Não'],
@@ -7582,7 +7668,7 @@ window.APP_CONFIG = Object.freeze({
         {
           name: 'Importação',
           rows: [IMPORT_TEMPLATE_HEADERS],
-          widths: [20,32,28,16,22,28,34,12,28,10,20,20,10,22,30,18,20,18,18,18,24,24,40]
+          widths: [20,32,28,18,16,22,28,34,12,28,10,20,20,10,22,30,18,20,18,18,18,24,24,40]
         },
         {
           name: 'Instruções',
@@ -7960,7 +8046,9 @@ window.APP_CONFIG = Object.freeze({
       $('#prepareOutlookSelected')?.addEventListener('click',()=>openOutlookMessage($('#prepareOutlookSelected').dataset.companyId||state.selectedContactCompanyId));
       $('#outlookMessageForm')?.addEventListener('submit',submitOutlookMessage);
       $('#outlookMessageRecipient')?.addEventListener('input',refreshOutlookMessagePreview);
-      document.querySelectorAll('input[name="outlookMessageBrand"]').forEach((input)=>input.addEventListener('change',refreshOutlookMessagePreview));
+      document.querySelectorAll('input[name="marcaConvenio"]').forEach((input)=>input.addEventListener('change',()=>{
+        $('#marcaConvenioGroup')?.classList.remove('invalid');
+      }));
       document.addEventListener('click',(event)=>{
         const button=event.target.closest?.('[data-edit-contact]');
         if(!button)return;
@@ -8053,6 +8141,7 @@ window.APP_CONFIG = Object.freeze({
   <div id="releaseMarkerV844" data-version="8.4.4" hidden></div>
 </body>
 </html>
+
 
 
 

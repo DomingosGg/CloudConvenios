@@ -1,4 +1,4 @@
-const VERSION = 'cloudflare-pages-exports-1.2.0-v849';
+const VERSION = 'cloudflare-pages-exports-1.3.0-v851';
 const BUCKET = 'exportacoes';
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -259,6 +259,7 @@ function companyToBackup(item, contacts = []) {
     cnpj: item.cnpj || '',
     razaoSocial: item.razao_social || '',
     nomeFantasia: item.nome_fantasia || item.razao_social || '',
+    marca: item.marca || '',
     dataAbertura: item.data_abertura || '',
     situacaoCadastral: item.situacao_cadastral || '',
     naturezaJuridica: item.natureza_juridica || '',
@@ -362,7 +363,7 @@ async function automaticExport(request, cfg, caller = null) {
   ));
 
   const companyRows = [[
-    'ID','CNPJ','Razão Social','Nome Fantasia','Data de Abertura','Situação Cadastral',
+    'ID','CNPJ','Razão Social','Nome Fantasia','Marca','Data de Abertura','Situação Cadastral',
     'Natureza Jurídica','CNAE Principal (código e descrição)','Início da Vigência',
     'Fim da Vigência','Dias restantes','Data do Cadastro','Estado','Cidade','CEP',
     'Logradouro','Número','Complemento','Bairro','E-mail','Telefone','Polo',
@@ -374,7 +375,7 @@ async function automaticExport(request, cfg, caller = null) {
     today.setUTCHours(12, 0, 0, 0);
     const days = endDate ? Math.ceil((endDate - today) / 86400000) : '';
     return [
-      item.id,item.cnpj,item.razao_social,item.nome_fantasia,item.data_abertura,
+      item.id,item.cnpj,item.razao_social,item.nome_fantasia,item.marca,item.data_abertura,
       item.situacao_cadastral,item.natureza_juridica,formatCnaeValue(item.cnae_principal),
       item.inicio_vigencia,item.fim_vigencia,days,item.data_cadastro,item.estado,item.cidade,
       item.cep,item.logradouro,item.numero,item.complemento,item.bairro,item.email,item.telefone,

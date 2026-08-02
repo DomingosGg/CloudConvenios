@@ -33,6 +33,7 @@
       cnpj: row.cnpj || '',
       razaoSocial: row.razao_social || '',
       nomeFantasia: row.nome_fantasia || '',
+      marca: row.marca || '',
       dataAbertura: row.data_abertura || '',
       situacaoCadastral: row.situacao_cadastral || '',
       naturezaJuridica: row.natureza_juridica || '',
@@ -67,6 +68,7 @@
       cnpj: nullable(company.cnpj),
       razao_social: String(company.razaoSocial || '').trim(),
       nome_fantasia: String(company.nomeFantasia || '').trim(),
+      marca: nullable(company.marca),
       data_abertura: nullable(company.dataAbertura),
       situacao_cadastral: nullable(company.situacaoCadastral),
       natureza_juridica: nullable(company.naturezaJuridica),
@@ -137,29 +139,63 @@
     if (error.code === '42501' || normalized.includes('row-level security') || normalized.includes('permission denied')) {
       return new Error('Seu perfil não possui permissão para realizar esta ação.');
     }
+    if (
+      (error.code === 'PGRST204' || error.code === '42703' || normalized.includes('column'))
+      && normalized.includes('marca')
+    ) {
+      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo 1-EXECUTAR-NO-SUPABASE.sql e tente novamente.');
+    }
     return new Error(message);
   }
 
   async function listCompanies() {
     assertClient();
-    const { data, error } = await client
+
+    const contactsSelect = `
+      contatos (
+        id, data_contato, horario, responsavel, forma_contato,
+        pessoa_contatada, resultado_contato, proxima_acao,
+        proximo_contato, observacoes, criado_em, atualizado_em
+      )
+    `;
+
+    const currentSelect = `
+      id, cnpj, razao_social, nome_fantasia, marca, data_abertura, situacao_cadastral,
+      natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
+      fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
+      estado, cidade, cep, email, telefone, polo, situacao,
+      formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
+      ${contactsSelect}
+    `;
+
+    let result = await client
       .from('concedentes')
-      .select(`
-        id, cnpj, razao_social, nome_fantasia, data_abertura, situacao_cadastral,
-        natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
-        fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
-        estado, cidade, cep, email, telefone, polo, situacao,
-        formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
-        contatos (
-          id, data_contato, horario, responsavel, forma_contato,
-          pessoa_contatada, resultado_contato, proxima_acao,
-          proximo_contato, observacoes, criado_em, atualizado_em
-        )
-      `)
+      .select(currentSelect)
       .order('atualizado_em', { ascending: false });
 
-    if (error) throw databaseError(error, 'Não foi possível carregar as concedentes.');
-    return (data || []).map(companyFromDatabase);
+    const missingBrandColumn = result.error && (
+      result.error.code === 'PGRST204'
+      || result.error.code === '42703'
+      || String(result.error.message || '').toLowerCase().includes('marca')
+    );
+
+    if (missingBrandColumn) {
+      console.warn('[Dados] A coluna marca ainda não existe. Carregando os cadastros no modo compatível.');
+      result = await client
+        .from('concedentes')
+        .select(`
+          id, cnpj, razao_social, nome_fantasia, data_abertura, situacao_cadastral,
+          natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
+          fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
+          estado, cidade, cep, email, telefone, polo, situacao,
+          formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
+          ${contactsSelect}
+        `)
+        .order('atualizado_em', { ascending: false });
+    }
+
+    if (result.error) throw databaseError(result.error, 'Não foi possível carregar as concedentes.');
+    return (result.data || []).map(companyFromDatabase);
   }
 
   async function createCompany(company, { preserveId = false } = {}) {

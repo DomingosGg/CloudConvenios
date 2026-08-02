@@ -1,1 +1,1 @@
-﻿8.5.0 - Recados padronizados no Outlook para situações selecionadas
+﻿8.5.1 - Marca vinculada ao convênio e recados automáticos por marca
