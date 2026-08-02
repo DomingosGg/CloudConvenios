@@ -1,1 +1,1 @@
-﻿8.6.1 - Dashboard simplificado e filtros de marca nos painéis
+﻿8.7.0 - Ações em massa, edição simultânea, relatório gerencial, filtros salvos e saúde do sistema
