@@ -1,1 +1,1 @@
-﻿8.5.3 - Duplicidade controlada pela combinação CNPJ e marca
+﻿8.6.0 - Fluxo operacional completo, fila, qualidade, modelos e confirmaÃ§Ã£o de envio

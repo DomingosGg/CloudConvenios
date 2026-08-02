@@ -1,4 +1,4 @@
-const VERSION = 'cloudflare-pages-exports-1.3.0-v851';
+const VERSION = 'cloudflare-pages-exports-1.4.0-v860';
 const BUCKET = 'exportacoes';
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -279,9 +279,12 @@ function companyToBackup(item, contacts = []) {
     email: item.email || '',
     telefone: item.telefone || '',
     polo: item.polo || '',
+    responsavelAcompanhamento: item.responsavel_acompanhamento || '',
+    prioridade: item.prioridade || 'Média',
     situacao: item.situacao || 'Não contatado',
     formasContato: Array.isArray(item.formas_contato) ? item.formas_contato : [],
     observacoes: item.observacoes || '',
+    comunicacoes: Array.isArray(item.comunicacoes) ? item.comunicacoes : [],
     contatos: contacts.map((contact) => ({
       id: contact.id,
       data: contact.data_contato || '',
@@ -345,9 +348,11 @@ async function automaticExport(request, cfg, caller = null) {
     }
   }
 
-  const [companies, contacts] = await Promise.all([
+  const [companies, contacts, communications, templates] = await Promise.all([
     queryAll(cfg, 'concedentes', '*', 'razao_social.asc'),
-    queryAll(cfg, 'contatos', '*', 'data_contato.desc')
+    queryAll(cfg, 'contatos', '*', 'data_contato.desc'),
+    queryAll(cfg, 'comunicacoes_email', '*', 'preparado_em.desc').catch(() => []),
+    queryAll(cfg, 'modelos_email', '*', 'situacao.asc').catch(() => [])
   ]);
 
   const contactsByCompany = new Map();
@@ -357,8 +362,30 @@ async function automaticExport(request, cfg, caller = null) {
     contactsByCompany.set(contact.concedente_id, list);
   });
 
+  const communicationsByCompany = new Map();
+  communications.forEach((communication) => {
+    const list = communicationsByCompany.get(communication.concedente_id) || [];
+    list.push({
+      id: communication.id,
+      templateId: communication.modelo_id || null,
+      marca: communication.marca || '',
+      situacaoOrigem: communication.situacao_origem || '',
+      destinatario: communication.destinatario || '',
+      assunto: communication.assunto || '',
+      corpo: communication.corpo || '',
+      status: communication.status || 'preparado',
+      usuarioId: communication.usuario_id || null,
+      usuarioNome: communication.usuario_nome || '',
+      usuarioEmail: communication.usuario_email || '',
+      preparadoEm: communication.preparado_em || '',
+      confirmadoEm: communication.confirmado_em || '',
+      criadoEm: communication.criado_em || ''
+    });
+    communicationsByCompany.set(communication.concedente_id, list);
+  });
+
   const backupCompanies = companies.map((item) => companyToBackup(
-    item,
+    { ...item, comunicacoes: communicationsByCompany.get(item.id) || [] },
     contactsByCompany.get(item.id) || []
   ));
 
@@ -367,7 +394,7 @@ async function automaticExport(request, cfg, caller = null) {
     'Natureza Jurídica','CNAE Principal (código e descrição)','Início da Vigência',
     'Fim da Vigência','Dias restantes','Data do Cadastro','Estado','Cidade','CEP',
     'Logradouro','Número','Complemento','Bairro','E-mail','Telefone','Polo',
-    'Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ',
+    'Responsável pelo acompanhamento','Prioridade','Situação','Forma de Contato','Fonte do CNPJ','Última consulta do CNPJ',
     'Observações','Atualizado em'
   ], ...companies.map((item) => {
     const endDate = item.fim_vigencia ? new Date(`${item.fim_vigencia}T12:00:00Z`) : null;
@@ -379,7 +406,7 @@ async function automaticExport(request, cfg, caller = null) {
       item.situacao_cadastral,item.natureza_juridica,formatCnaeValue(item.cnae_principal),
       item.inicio_vigencia,item.fim_vigencia,days,item.data_cadastro,item.estado,item.cidade,
       item.cep,item.logradouro,item.numero,item.complemento,item.bairro,item.email,item.telefone,
-      item.polo,item.situacao,(item.formas_contato || []).join(', '),item.fonte_cnpj,
+      item.polo,item.responsavel_acompanhamento,item.prioridade,item.situacao,(item.formas_contato || []).join(', '),item.fonte_cnpj,
       item.consultado_em,item.observacoes,item.atualizado_em
     ];
   })];
@@ -407,6 +434,29 @@ async function automaticExport(request, cfg, caller = null) {
     ];
   })];
 
+
+
+  const communicationRows = [[
+    'ID','Concedente','CNPJ','Marca','Situação de origem','Destinatário','Assunto',
+    'Status','Usuário','E-mail do usuário','Preparado em','Confirmado em'
+  ], ...communications.map((item) => {
+    const company = companyMap.get(item.concedente_id) || {};
+    return [
+      item.id,
+      company.nome_fantasia || company.razao_social || item.concedente_id,
+      company.cnpj || '',
+      item.marca,
+      item.situacao_origem,
+      item.destinatario,
+      item.assunto,
+      item.status,
+      item.usuario_nome,
+      item.usuario_email,
+      item.preparado_em,
+      item.confirmado_em
+    ];
+  })];
+
   const timeSuffix = force
     ? `_${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`
     : '';
@@ -418,6 +468,9 @@ async function automaticExport(request, cfg, caller = null) {
     exportedAt: new Date().toISOString(),
     totalConcedentes: companies.length,
     totalContatos: contacts.length,
+    totalComunicacoesEmail: communications.length,
+    modelosEmail: templates,
+    comunicacoesEmail: communications,
     concedentes: backupCompanies
   };
 
@@ -439,6 +492,12 @@ async function automaticExport(request, cfg, caller = null) {
       type: 'contatos-automatico',
       blob: csvBlob(contactRows),
       count: contacts.length
+    },
+    {
+      filename: `comunicacoes_email_${stamp}${timeSuffix}.csv`,
+      type: 'comunicacoes-email-automatico',
+      blob: csvBlob(communicationRows),
+      count: communications.length
     }
   ];
 
@@ -467,7 +526,9 @@ async function automaticExport(request, cfg, caller = null) {
       skipped: false,
       items: saved,
       companies: companies.length,
-      contacts: contacts.length
+      contacts: contacts.length,
+      communications: communications.length,
+      templates: templates.length
     }
   });
 }

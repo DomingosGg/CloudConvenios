@@ -42,6 +42,42 @@
     };
   }
 
+
+  function emailCommunicationFromDatabase(row = {}) {
+    return {
+      id: row.id,
+      templateId: row.modelo_id || null,
+      marca: row.marca || '',
+      situacaoOrigem: row.situacao_origem || '',
+      destinatario: row.destinatario || '',
+      assunto: row.assunto || '',
+      corpo: row.corpo || '',
+      status: row.status || 'preparado',
+      usuarioId: row.usuario_id || null,
+      usuarioNome: row.usuario_nome || '',
+      usuarioEmail: row.usuario_email || '',
+      preparadoEm: row.preparado_em || row.criado_em || '',
+      confirmadoEm: row.confirmado_em || '',
+      criadoEm: row.criado_em || ''
+    };
+  }
+
+  function emailTemplateFromDatabase(row = {}) {
+    return {
+      id: row.id,
+      situacao: row.situacao || '',
+      marca: row.marca || '',
+      titulo: row.titulo || '',
+      corpo: row.corpo || '',
+      situacaoAposEnvio: row.situacao_apos_envio || '',
+      proximaAcao: row.proxima_acao || '',
+      diasProximoContato: Number(row.dias_proximo_contato || 0),
+      ativo: row.ativo !== false,
+      createdAt: row.criado_em || '',
+      updatedAt: row.atualizado_em || ''
+    };
+  }
+
   function companyFromDatabase(row = {}) {
     return {
       id: row.id,
@@ -68,10 +104,13 @@
       email: row.email || '',
       telefone: row.telefone || '',
       polo: row.polo || '',
+      responsavelAcompanhamento: row.responsavel_acompanhamento || '',
+      prioridade: row.prioridade || 'Média',
       situacao: row.situacao || 'Não contatado',
       formasContato: Array.isArray(row.formas_contato) ? row.formas_contato : [],
       observacoes: row.observacoes || '',
       contatos: Array.isArray(row.contatos) ? row.contatos.map(contactFromDatabase) : [],
+      comunicacoes: Array.isArray(row.comunicacoes_email) ? row.comunicacoes_email.map(emailCommunicationFromDatabase) : [],
       demo: Boolean(row.demonstracao),
       createdAt: row.criado_em || '',
       updatedAt: row.atualizado_em || ''
@@ -103,6 +142,8 @@
       email: nullable(company.email),
       telefone: nullable(company.telefone),
       polo: String(company.polo || '').trim(),
+      responsavel_acompanhamento: nullable(company.responsavelAcompanhamento),
+      prioridade: ['Baixa','Média','Alta','Urgente'].includes(company.prioridade) ? company.prioridade : 'Média',
       situacao: company.situacao || 'Não contatado',
       formas_contato: Array.isArray(company.formasContato) ? company.formasContato : [],
       observacoes: nullable(company.observacoes),
@@ -174,13 +215,21 @@
       )
     `;
 
+    const communicationsSelect = `
+      comunicacoes_email (
+        id, modelo_id, marca, situacao_origem, destinatario, assunto, corpo,
+        status, usuario_id, usuario_nome, usuario_email,
+        preparado_em, confirmado_em, criado_em
+      )
+    `;
+
     const currentSelect = `
       id, cnpj, razao_social, nome_fantasia, marca, data_abertura, situacao_cadastral,
       natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
       fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
-      estado, cidade, cep, email, telefone, polo, situacao,
-      formas_contato, observacoes, demonstracao, criado_em, atualizado_em,
-      ${contactsSelect}
+      estado, cidade, cep, email, telefone, polo, responsavel_acompanhamento,
+      prioridade, situacao, formas_contato, observacoes, demonstracao,
+      criado_em, atualizado_em, ${contactsSelect}, ${communicationsSelect}
     `;
 
     let result = await client
@@ -188,18 +237,20 @@
       .select(currentSelect)
       .order('atualizado_em', { ascending: false });
 
-    const missingBrandColumn = result.error && (
+    const missingWorkflowSchema = result.error && (
       result.error.code === 'PGRST204'
       || result.error.code === '42703'
-      || String(result.error.message || '').toLowerCase().includes('marca')
+      || ['marca','responsavel_acompanhamento','prioridade','comunicacoes_email'].some((name) =>
+        String(result.error.message || '').toLowerCase().includes(name)
+      )
     );
 
-    if (missingBrandColumn) {
-      console.warn('[Dados] A coluna marca ainda não existe. Carregando os cadastros no modo compatível.');
+    if (missingWorkflowSchema) {
+      console.warn('[Dados] O fluxo operacional V8.6.0 ainda não foi instalado. Carregando em modo compatível.');
       result = await client
         .from('concedentes')
         .select(`
-          id, cnpj, razao_social, nome_fantasia, data_abertura, situacao_cadastral,
+          id, cnpj, razao_social, nome_fantasia, marca, data_abertura, situacao_cadastral,
           natureza_juridica, cnae_principal, logradouro, numero, complemento, bairro,
           fonte_cnpj, consultado_em, inicio_vigencia, fim_vigencia, data_cadastro,
           estado, cidade, cep, email, telefone, polo, situacao,
@@ -312,6 +363,97 @@
     return saved;
   }
 
+
+  async function updateCompanyManagement(id, values = {}) {
+    assertClient();
+    const payload = {
+      responsavel_acompanhamento: nullable(values.responsavelAcompanhamento),
+      prioridade: ['Baixa','Média','Alta','Urgente'].includes(values.prioridade) ? values.prioridade : 'Média'
+    };
+    const { data, error } = await client
+      .from('concedentes')
+      .update(payload)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw databaseError(error, 'Não foi possível atualizar o acompanhamento.');
+    return companyFromDatabase({ ...data, contatos: [], comunicacoes_email: [] });
+  }
+
+  async function listEmailTemplates() {
+    assertClient();
+    const { data, error } = await client
+      .from('modelos_email')
+      .select('*')
+      .order('situacao', { ascending: true })
+      .order('marca', { ascending: true });
+    if (error) throw databaseError(error, 'Não foi possível carregar os modelos de e-mail.');
+    return (data || []).map(emailTemplateFromDatabase);
+  }
+
+  async function saveEmailTemplate(template = {}) {
+    assertAdmin();
+    const payload = {
+      situacao: String(template.situacao || '').trim(),
+      marca: brandKey(template.marca),
+      titulo: String(template.titulo || '').trim(),
+      corpo: String(template.corpo || '').trim(),
+      situacao_apos_envio: String(template.situacaoAposEnvio || '').trim(),
+      proxima_acao: nullable(template.proximaAcao),
+      dias_proximo_contato: Math.max(0, Number(template.diasProximoContato || 0)),
+      ativo: template.ativo !== false
+    };
+    if (/^[0-9a-f-]{36}$/i.test(template.id || '')) payload.id = template.id;
+    const { data, error } = await client
+      .from('modelos_email')
+      .upsert(payload, { onConflict: 'situacao,marca' })
+      .select('*')
+      .single();
+    if (error) throw databaseError(error, 'Não foi possível salvar o modelo de e-mail.');
+    return emailTemplateFromDatabase(data);
+  }
+
+  async function createEmailCommunication(values = {}) {
+    assertClient();
+    const payload = {
+      concedente_id: values.companyId,
+      modelo_id: values.templateId || null,
+      marca: brandKey(values.marca),
+      situacao_origem: String(values.situacaoOrigem || '').trim(),
+      destinatario: String(values.destinatario || '').trim(),
+      assunto: String(values.assunto || '').trim(),
+      corpo: String(values.corpo || ''),
+      status: values.status || 'preparado',
+      usuario_id: values.usuarioId || window.currentUser?.id || null,
+      usuario_nome: String(values.usuarioNome || window.currentUser?.nome || ''),
+      usuario_email: String(values.usuarioEmail || window.currentUser?.email || '')
+    };
+    const { data, error } = await client
+      .from('comunicacoes_email')
+      .insert(payload)
+      .select('*')
+      .single();
+    if (error) throw databaseError(error, 'Não foi possível registrar a preparação do e-mail.');
+    return emailCommunicationFromDatabase(data);
+  }
+
+  async function updateEmailCommunicationStatus(id, status) {
+    assertClient();
+    const normalizedStatus = ['preparado','enviado','nao_enviado'].includes(status) ? status : 'preparado';
+    const payload = {
+      status: normalizedStatus,
+      confirmado_em: normalizedStatus === 'preparado' ? null : new Date().toISOString()
+    };
+    const { data, error } = await client
+      .from('comunicacoes_email')
+      .update(payload)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) throw databaseError(error, 'Não foi possível atualizar o histórico do e-mail.');
+    return emailCommunicationFromDatabase(data);
+  }
+
   async function deleteDemonstration() {
     assertAdmin();
     const { data, error } = await client
@@ -339,6 +481,7 @@
     const preserveIds = Boolean(options.preserveIds);
     let inserted = 0;
     let contactsInserted = 0;
+    let communicationsInserted = 0;
     let rejected = 0;
     const errors = [];
 
@@ -357,19 +500,58 @@
             errors.push(`${original.nomeFantasia || original.razaoSocial}: ${contactError.message}`);
           }
         }
+        for (const communication of original.comunicacoes || []) {
+          try {
+            const { error } = await client.from('comunicacoes_email').insert({
+              concedente_id: company.id,
+              modelo_id: /^[0-9a-f-]{36}$/i.test(communication.templateId || '') ? communication.templateId : null,
+              marca: brandKey(communication.marca || original.marca),
+              situacao_origem: communication.situacaoOrigem || original.situacao || '',
+              destinatario: communication.destinatario || '',
+              assunto: communication.assunto || '',
+              corpo: communication.corpo || '',
+              status: ['preparado','enviado','nao_enviado'].includes(communication.status) ? communication.status : 'preparado',
+              usuario_id: communication.usuarioId || null,
+              usuario_nome: communication.usuarioNome || '',
+              usuario_email: communication.usuarioEmail || '',
+              preparado_em: communication.preparadoEm || communication.criadoEm || new Date().toISOString(),
+              confirmado_em: communication.confirmadoEm || null
+            });
+            if (error) throw databaseError(error);
+            communicationsInserted += 1;
+          } catch (communicationError) {
+            errors.push(`${original.nomeFantasia || original.razaoSocial}: ${communicationError.message}`);
+          }
+        }
       } catch (error) {
         rejected += 1;
         errors.push(`${original.nomeFantasia || original.razaoSocial || 'Registro sem nome'}: ${error.message}`);
       }
     }
 
-    return { inserted, contactsInserted, rejected, errors };
+    return { inserted, contactsInserted, communicationsInserted, rejected, errors };
   }
 
   async function replaceAll(companies) {
     assertAdmin();
     await clearAll();
     return insertCompaniesWithContacts(companies);
+  }
+
+  async function replaceAllWorkflow(companies, templates = []) {
+    assertAdmin();
+    await clearAll();
+    const result = await insertCompaniesWithContacts(companies);
+    let templatesRestored = 0;
+    for (const template of templates || []) {
+      try {
+        await saveEmailTemplate(template);
+        templatesRestored += 1;
+      } catch (error) {
+        result.errors.push(`Modelo ${template.situacao || ''} / ${template.marca || ''}: ${error.message}`);
+      }
+    }
+    return { ...result, templatesRestored };
   }
 
   async function migrateLocal(companies) {
@@ -425,12 +607,18 @@
     saveCompany,
     deleteCompany,
     updateCompanyStatus,
+    updateCompanyManagement,
     createContact,
     updateContact,
+    listEmailTemplates,
+    saveEmailTemplate,
+    createEmailCommunication,
+    updateEmailCommunicationStatus,
     deleteDemonstration,
     clearAll,
     insertCompaniesWithContacts,
     replaceAll,
+    replaceAllWorkflow,
     migrateLocal,
     companyFromDatabase,
     contactFromDatabase

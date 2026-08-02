@@ -114,6 +114,13 @@
       exportHistoryLoading: false,
       automaticBackupRunning: false,
       automaticBackupLastCheck: '',
+      emailTemplates: [],
+      emailTemplatesLoading: false,
+      workflowSchemaReady: true,
+      pendingEmail: null,
+      queueView: 'mine',
+      queueDueFilter: '',
+      qualityFilter: '',
       importRows: [],
       importErrors: [],
       importFileName: '',
@@ -182,14 +189,22 @@
         email: company.email || '',
         telefone: maskPhone(company.telefone || ''),
         polo: company.polo || '',
+        responsavelAcompanhamento: company.responsavelAcompanhamento || company.responsavel_acompanhamento || '',
+        prioridade: ['Baixa','Média','Alta','Urgente'].includes(company.prioridade) ? company.prioridade : 'Média',
         situacao: company.situacao || 'Não contatado',
         formasContato: Array.isArray(company.formasContato) ? company.formasContato : String(company.formasContato || '').split(/[,|]/).map((item) => item.trim()).filter(Boolean),
         observacoes: company.observacoes || '',
         contatos: Array.isArray(company.contatos) ? company.contatos : [],
+        comunicacoes: Array.isArray(company.comunicacoes) ? company.comunicacoes : [],
         demo: Boolean(company.demo),
         createdAt: company.createdAt || new Date().toISOString(),
         updatedAt: company.updatedAt || new Date().toISOString()
       };
+      const latestOperationalContact = [...obj.contatos]
+        .sort((a,b)=>`${b.data || ''} ${b.horario || ''}`.localeCompare(`${a.data || ''} ${a.horario || ''}`))[0] || null;
+      obj.proximaAcao = latestOperationalContact?.proximaAcao || '';
+      obj.proximaData = latestOperationalContact?.proximaData || '';
+      obj.responsavelOperacional = obj.responsavelAcompanhamento || latestOperationalContact?.responsavel || '';
       const vigencia = vigenciaInfo(obj.inicioVigencia, obj.fimVigencia);
       obj.situacaoVigencia = calculateVigenciaStatus(obj.fimVigencia);
       obj.vigenciaResumo = vigencia.resumo;
@@ -314,7 +329,7 @@
       $$('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.panel === name));
       const panel = $('#panel-' + name); if (panel) panel.classList.add('active');
       const meta = {
-        dashboard:['Dashboard','Visão geral dos convênios e atividades.'], concedentes:['Concedentes','Cadastro, filtros e acompanhamento das empresas.'], renovacoes:['Renovações','Fluxo Kanban do processo de renovação.'], contatos:['Contatos','Histórico e próximas ações de acompanhamento.'], notificacoes:['Notificações','Alertas de vigência, contatos e acompanhamentos.'], relatorios:['Relatórios','Indicadores consolidados e análises.'], usuarios:['Usuários','Cadastro, bloqueio e gestão dos acessos.'], auditoria:['Auditoria','Histórico de ações, alterações e exclusões.'], configuracoes:['Configurações','Preferências e segurança dos dados.']
+        dashboard:['Dashboard','Visão geral dos convênios e atividades.'], concedentes:['Concedentes','Cadastro, filtros e acompanhamento das empresas.'], renovacoes:['Renovações','Fluxo Kanban do processo de renovação.'], contatos:['Contatos','Histórico e próximas ações de acompanhamento.'], fila:['Minha fila','Ações, prazos e prioridades do acompanhamento.'], qualidade:['Qualidade dos dados','Pendências cadastrais que precisam de correção.'], notificacoes:['Notificações','Alertas de vigência, contatos e acompanhamentos.'], relatorios:['Relatórios','Indicadores consolidados e análises.'], usuarios:['Usuários','Cadastro, bloqueio e gestão dos acessos.'], auditoria:['Auditoria','Histórico de ações, alterações e exclusões.'], configuracoes:['Configurações','Preferências e segurança dos dados.']
       }[name];
       $('#pageTitle').textContent = meta[0]; $('#pageSubtitle').textContent = meta[1];
       if (window.innerWidth <= 900) $('#sidebar').classList.remove('mobile-open');
@@ -322,6 +337,8 @@
       if (name === 'concedentes') renderCompanies();
       if (name === 'renovacoes') renderKanban();
       if (name === 'contatos') renderContactsPanel();
+      if (name === 'fila') renderWorkQueue();
+      if (name === 'qualidade') renderDataQuality();
       if (name === 'notificacoes') window.notificationsPanel?.open();
       if (name === 'relatorios') renderReports();
       if (name === 'usuarios') window.userManagement?.open();
@@ -385,13 +402,14 @@
       setOptions('#filterCidade',state.data.concedentes.map(c=>c.cidade),$('#filterCidade').value);
       setOptions('#filterPolo',state.data.concedentes.map(c=>c.polo),$('#filterPolo').value);
       setOptions('#filterMarca',state.data.concedentes.map(c=>c.marca),$('#filterMarca')?.value || '');
+      if ($('#filterResponsavel')) setOptions('#filterResponsavel',state.data.concedentes.map(c=>normalizeCompany(c).responsavelOperacional),$('#filterResponsavel').value);
     }
     function getFilteredCompanies() {
       const q = normalize($('#tableSearch').value);
-      const filters = { vigencia:$('#filterVigencia').value, situacao:$('#filterSituacao').value, estado:$('#filterEstado').value, cidade:$('#filterCidade').value, polo:$('#filterPolo').value, marca:$('#filterMarca')?.value || '', forma:$('#filterForma').value, inicio:$('#filterInicio').value, fim:$('#filterFim').value, rapido:$('#filterRapido').value };
+      const filters = { vigencia:$('#filterVigencia').value, situacao:$('#filterSituacao').value, estado:$('#filterEstado').value, cidade:$('#filterCidade').value, polo:$('#filterPolo').value, marca:$('#filterMarca')?.value || '', responsavel:$('#filterResponsavel')?.value || '', prioridade:$('#filterPrioridade')?.value || '', forma:$('#filterForma').value, inicio:$('#filterInicio').value, fim:$('#filterFim').value, rapido:$('#filterRapido').value };
       const now = parseDate(todayISO());
       return state.data.concedentes.map(normalizeCompany).filter(c=>{
-        const hay = normalize([c.cnpj,c.razaoSocial,c.nomeFantasia,c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.cep,c.email,c.telefone,c.polo,c.marca,c.situacao,c.formasContato.join(' '),c.observacoes].join(' '));
+        const hay = normalize([c.cnpj,c.razaoSocial,c.nomeFantasia,c.situacaoCadastral,c.naturezaJuridica,c.cnaePrincipal,c.logradouro,c.numero,c.complemento,c.bairro,c.estado,c.cidade,c.cep,c.email,c.telefone,c.polo,c.marca,c.responsavelOperacional,c.prioridade,c.proximaAcao,c.proximaData,c.situacao,c.formasContato.join(' '),c.observacoes].join(' '));
         if (q && !hay.includes(q)) return false;
         if (filters.vigencia && c.situacaoVigencia !== filters.vigencia) return false;
         if (filters.situacao && c.situacao !== filters.situacao) return false;
@@ -399,6 +417,8 @@
         if (filters.cidade && c.cidade !== filters.cidade) return false;
         if (filters.polo && c.polo !== filters.polo) return false;
         if (filters.marca && c.marca !== filters.marca) return false;
+        if (filters.responsavel && c.responsavelOperacional !== filters.responsavel) return false;
+        if (filters.prioridade && c.prioridade !== filters.prioridade) return false;
         if (filters.forma && !c.formasContato.includes(filters.forma)) return false;
         if (filters.inicio && (!c.inicioVigencia || c.inicioVigencia < filters.inicio)) return false;
         if (filters.fim && (!c.fimVigencia || c.fimVigencia > filters.fim)) return false;
@@ -717,7 +737,7 @@
         [
           'cnpj','razaoSocial','nomeFantasia','dataAbertura','situacaoCadastral','naturezaJuridica','cnaePrincipal',
           'logradouro','numero','complemento','bairro','inicioVigencia','fimVigencia','dataCadastro','estado','cidade',
-          'cep','email','telefone','polo','situacao','observacoes'
+          'cep','email','telefone','polo','responsavelAcompanhamento','prioridade','situacao','observacoes'
         ].forEach((key) => { const field = $('#' + key); if (field) field.value = company[key] || ''; });
         $$('input[name="formasContato"]').forEach((checkbox) => { checkbox.checked = (company.formasContato || []).includes(checkbox.value); });
         $$('input[name="marcaConvenio"]').forEach((input) => {
@@ -801,6 +821,8 @@
         email: $('#email').value.trim(),
         telefone: $('#telefone').value,
         polo: $('#polo').value.trim(),
+        responsavelAcompanhamento: $('#responsavelAcompanhamento')?.value.trim() || '',
+        prioridade: $('#prioridade')?.value || 'Média',
         marca: document.querySelector('input[name="marcaConvenio"]:checked')?.value || '',
         situacao: $('#situacao').value,
         formasContato: $$('input[name="formasContato"]:checked').map((item) => item.value),
@@ -1489,7 +1511,7 @@
     function renderAll() {
       state.data.concedentes=state.data.concedentes.map(normalizeCompany); updateFilterOptions(); renderAlerts(); renderSettings();
       const active=$('.panel.active')?.id.replace('panel-','')||'dashboard';
-      if(active==='dashboard')renderDashboard(); if(active==='concedentes')renderCompanies(); if(active==='renovacoes')renderKanban(); if(active==='contatos')renderContactsPanel(); if(active==='notificacoes')window.notificationsPanel?.open(); if(active==='relatorios')renderReports();
+      if(active==='dashboard')renderDashboard(); if(active==='concedentes')renderCompanies(); if(active==='renovacoes')renderKanban(); if(active==='contatos')renderContactsPanel(); if(active==='fila')renderWorkQueue(); if(active==='qualidade')renderDataQuality(); if(active==='notificacoes')window.notificationsPanel?.open(); if(active==='relatorios')renderReports();
       applyAccessRules();
     }
     function refreshChartsIfVisible(){setTimeout(()=>{const active=$('.panel.active')?.id;if(active==='panel-dashboard')renderDashboard();if(active==='panel-relatorios')renderReports();},30);}
@@ -2794,6 +2816,729 @@
       window.addEventListener('resize',()=>{if(window.innerWidth>900)$('#sidebar').classList.remove('mobile-open');});
     }
 
+
+    /* =====================================================================
+       CLOUDCONVENIOS V8.6.0 — FLUXO OPERACIONAL COMPLETO
+       ===================================================================== */
+
+    const closedWorkflowStatuses = new Set(['Renovado','Não possui interesse','Contato não localizado','Convênio encerrado']);
+    const priorityOrder = Object.freeze({ Urgente: 0, Alta: 1, Média: 2, Baixa: 3 });
+
+    function fallbackEmailTemplates() {
+      const definitions = [
+        {
+          situacao: 'Não contatado',
+          titulo: 'Renovação de convênio | {{MARCA}} e {{LOCAL}}',
+          corpo: [
+            'Prezados, {{SAUDACAO}}, tudo bem?',
+            'Verificamos que o convênio firmado entre a {{MARCA}} e {{LOCAL}} encontra-se próximo do término de sua vigência.',
+            'Gostaríamos de verificar o interesse na renovação do convênio, por meio de um termo aditivo.',
+            'Caso haja interesse na renovação do convênio, formalizaremos o aditivo para apreciação.',
+            'Permanecemos à disposição para quaisquer esclarecimentos e aguardamos o retorno.',
+            'Atenciosamente,'
+          ].join('\n\n'),
+          situacaoAposEnvio: 'Aguardando retorno',
+          proximaAcao: 'Aguardar retorno sobre o interesse na renovação',
+          diasProximoContato: 7
+        },
+        {
+          situacao: 'Aguardando retorno',
+          titulo: 'Solicitação de análise da renovação de convênio | {{MARCA}}',
+          corpo: [
+            'Prezados, {{SAUDACAO}}.',
+            'Anteriormente, entramos em contato para verificar o interesse na renovação do convênio vigente com a {{MARCA}}, pelo período de mais 60 meses.',
+            'A continuidade da parceria reforça a cooperação entre as instituições e contribui diretamente para a formação dos acadêmicos, ao possibilitar a aplicação prática dos conhecimentos adquiridos durante sua trajetória acadêmica.',
+            'Para a concedente, o convênio representa uma oportunidade de aproximação com o ambiente educacional, participação no desenvolvimento de novos profissionais e contato com talentos que poderão contribuir futuramente com o mercado de trabalho.',
+            'Diante disso, solicitamos a gentileza de confirmar o interesse na renovação, para iniciarmos os procedimentos necessários e assegurar a continuidade da parceria.',
+            'Permanecemos à disposição para quaisquer esclarecimentos.',
+            'Atenciosamente,'
+          ].join('\n\n'),
+          situacaoAposEnvio: 'Aguardando retorno',
+          proximaAcao: 'Realizar novo acompanhamento da renovação',
+          diasProximoContato: 7
+        },
+        {
+          situacao: 'Documentação solicitada',
+          titulo: 'Solicitação de análise documental da renovação de convênio | {{MARCA}}',
+          corpo: [
+            'Prezados, {{SAUDACAO}}, tudo bem?',
+            'Anteriormente, encaminhamos o aditivo para renovação do convênio vigente com a {{MARCA}}, pelo período de mais 60 meses.',
+            'Solicitamos a confirmação do recebimento e a análise documental para seguimento do processo.',
+            'Em caso de recebimento e interesse, pedimos que envie o documento assinado, para atualizarmos o cadastro em nosso sistema. Ressaltamos que o representante da instituição realizará a assinatura do documento e uma cópia será encaminhada para apreciação.',
+            'Agradecemos desde já pela pareceria e atenção.',
+            'Atenciosamente,'
+          ].join('\n\n'),
+          situacaoAposEnvio: 'Documentação solicitada',
+          proximaAcao: 'Acompanhar a análise documental e o recebimento do aditivo assinado',
+          diasProximoContato: 7
+        }
+      ];
+      return definitions.flatMap((item) => marcasConvenio.map((marca) => ({
+        id: `fallback-${normalize(item.situacao).replace(/\s+/g,'-')}-${normalize(marca)}`,
+        ...item,
+        marca,
+        ativo: true,
+        fallback: true
+      })));
+    }
+
+    function allEmailTemplates() {
+      return state.emailTemplates.length ? state.emailTemplates : fallbackEmailTemplates();
+    }
+
+    function findEmailTemplate(status, brand) {
+      const normalizedBrand = normalizeBrand(brand);
+      return allEmailTemplates().find((item) =>
+        item.ativo !== false
+        && String(item.situacao || '').trim() === String(status || '').trim()
+        && normalizeBrand(item.marca) === normalizedBrand
+      ) || null;
+    }
+
+    function replaceMessageTokens(text, company, brand, date = new Date()) {
+      const values = {
+        MARCA: normalizeBrand(brand),
+        LOCAL: outlookLocalName(company),
+        SAUDACAO: currentOutlookGreeting(date),
+        RAZAO_SOCIAL: company?.razaoSocial || '',
+        NOME_FANTASIA: company?.nomeFantasia || '',
+        CNPJ: company?.cnpj || '',
+        CIDADE: company?.cidade || '',
+        ESTADO: company?.estado || '',
+        POLO: company?.polo || '',
+        FIM_VIGENCIA: formatDate(company?.fimVigencia),
+        USUARIO_RESPONSAVEL: window.currentUser?.nome || window.currentUser?.email || ''
+      };
+      return String(text || '').replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => values[key] ?? '');
+    }
+
+    buildStandardOutlookMessage = function(company, brand, date = new Date()) {
+      const template = findEmailTemplate(company?.situacao, brand);
+      if (!template) return null;
+      return {
+        subject: replaceMessageTokens(template.titulo, company, brand, date),
+        body: replaceMessageTokens(template.corpo, company, brand, date),
+        template
+      };
+    };
+
+    function workflowDateInfo(company) {
+      const normalized = normalizeCompany(company);
+      const date = normalized.proximaData || '';
+      const now = todayISO();
+      let category = 'sem-data';
+      if (date) {
+        const diff = daysBetween(parseDate(now), parseDate(date));
+        category = diff < 0 ? 'atrasado' : diff === 0 ? 'hoje' : diff <= 7 ? 'proximos-7' : 'futuro';
+      }
+      return {
+        nextAction: normalized.proximaAcao || (normalized.situacao === 'Não contatado' ? 'Realizar primeiro contato' : 'Definir próxima ação'),
+        nextDate: date,
+        responsible: normalized.responsavelOperacional || '',
+        priority: normalized.prioridade || 'Média',
+        category
+      };
+    }
+
+    function priorityBadge(priority) {
+      const className = priority === 'Urgente' ? 'badge-danger' : priority === 'Alta' ? 'badge-orange' : priority === 'Média' ? 'badge-warning' : 'badge-muted';
+      return `<span class="badge ${className}">${escapeHTML(priority || 'Média')}</span>`;
+    }
+
+    function dataQualityIssues(company) {
+      const issues = [];
+      const phoneDigits = onlyDigits(company.telefone);
+      if (!company.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(company.email)) issues.push({ key:'email', label:'E-mail ausente ou inválido' });
+      if (!phoneDigits || phoneDigits.length < 10) issues.push({ key:'telefone', label:'Telefone ausente ou inválido' });
+      if (!normalizeBrand(company.marca)) issues.push({ key:'marca', label:'Marca não informada' });
+      if (!company.fimVigencia) issues.push({ key:'vigencia', label:'Fim da vigência não informado' });
+      if (company.cnpj && !cnpjValidLength(company.cnpj)) issues.push({ key:'cnpj', label:'CNPJ incompleto' });
+      if (!(company.contatos || []).length) issues.push({ key:'contatos', label:'Nenhum contato registrado' });
+      if (['BAIXADA','INAPTA','SUSPENSA','NULA'].includes(String(company.situacaoCadastral || '').toUpperCase())) issues.push({ key:'situacao-cadastral', label:`Situação cadastral: ${company.situacaoCadastral}` });
+      if (!company.cep || !company.logradouro || !company.cidade || !company.estado) issues.push({ key:'endereco', label:'Endereço incompleto' });
+      if (!company.responsavelOperacional) issues.push({ key:'responsavel', label:'Sem responsável pelo acompanhamento' });
+      return issues;
+    }
+
+    function ensureWorkflowEnhancementsUI() {
+      if (!$('#workflowEnhancementsStyle')) {
+        document.head.insertAdjacentHTML('beforeend', `<style id="workflowEnhancementsStyle">
+          .workflow-brand-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:16px}
+          .workflow-brand-card{display:grid;gap:10px}.workflow-brand-card .brand-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+          .workflow-brand-card .brand-head strong{font-size:15px}.workflow-brand-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+          .workflow-stat{padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}.workflow-stat span{display:block;color:var(--muted);font-size:10px}.workflow-stat strong{font-size:18px}
+          .workflow-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.workflow-card{padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+          .workflow-card span{display:block;color:var(--muted);font-size:10px}.workflow-card strong{font-size:22px}.workflow-card button{margin-top:9px}
+          .workflow-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:14px}.workflow-toolbar .field{min-width:170px;flex:1}
+          .workflow-table td{vertical-align:top}.workflow-table small{display:block;color:var(--muted);margin-top:4px}.workflow-actions{display:flex;gap:6px;flex-wrap:wrap}
+          .workflow-due-overdue{color:#b91c1c;font-weight:700}.workflow-due-today{color:#d97706;font-weight:700}.workflow-due-upcoming{color:#1d4ed8;font-weight:700}
+          .quality-tags{display:flex;flex-wrap:wrap;gap:5px}.quality-tag{font-size:9px;padding:4px 7px;border-radius:999px;background:rgba(220,38,38,.08);color:#b91c1c;border:1px solid rgba(220,38,38,.16)}
+          .email-history{display:grid;gap:10px;margin-top:14px}.email-history-item{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)}
+          .email-history-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.email-history-item small{color:var(--muted)}
+          .template-list{display:grid;gap:10px}.template-item{padding:12px;border:1px solid var(--border);border-radius:12px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+          .template-item small{display:block;color:var(--muted);margin-top:3px}.backup-monitor-ok{border-color:rgba(22,163,74,.35)}.backup-monitor-warning{border-color:rgba(217,119,6,.35)}
+          .send-confirm-summary{display:grid;gap:7px}.send-confirm-summary strong{font-size:12px}.send-confirm-summary span{color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+          @media(max-width:1000px){.workflow-brand-grid{grid-template-columns:1fr}.workflow-brand-stats,.workflow-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+          @media(max-width:640px){.workflow-brand-stats,.workflow-grid{grid-template-columns:1fr}.workflow-toolbar{display:grid}.template-item{grid-template-columns:1fr}}
+        </style>`);
+      }
+
+      const contactsNav = $('.nav-item[data-panel="contatos"]');
+      if (contactsNav && !$('.nav-item[data-panel="fila"]')) {
+        contactsNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="fila"><i class="fa-solid fa-list-check"></i><span class="nav-label">Minha fila</span></button>');
+      }
+      const reportsNav = $('.nav-item[data-panel="relatorios"]');
+      if (reportsNav && !$('.nav-item[data-panel="qualidade"]')) {
+        reportsNav.insertAdjacentHTML('afterend', '<button class="nav-item" data-panel="qualidade"><i class="fa-solid fa-list-circle-check"></i><span class="nav-label">Qualidade dos dados</span></button>');
+      }
+
+      const panelsHost = $('#panel-dashboard')?.parentElement;
+      if (panelsHost && !$('#panel-fila')) {
+        panelsHost.insertAdjacentHTML('beforeend', `
+          <section class="panel" id="panel-fila">
+            <div class="panel-header"><div><h2>Minha fila</h2><p>Acompanhe prazos, prioridades e ações pendentes.</p></div></div>
+            <div class="workflow-grid" id="queueMetrics"></div>
+            <div class="card" style="margin-top:14px">
+              <div class="workflow-toolbar">
+                <div class="field"><label>Responsabilidade</label><select class="form-control" id="queueScope"><option value="mine">Minha fila</option><option value="all">Todos</option><option value="unassigned">Sem responsável</option></select></div>
+                <div class="field"><label>Prazo</label><select class="form-control" id="queueDue"><option value="">Todos os prazos</option><option value="atrasado">Atrasados</option><option value="hoje">Para hoje</option><option value="proximos-7">Próximos 7 dias</option><option value="sem-data">Sem data definida</option></select></div>
+                <div class="field"><label>Prioridade</label><select class="form-control" id="queuePriority"><option value="">Todas</option><option>Urgente</option><option>Alta</option><option>Média</option><option>Baixa</option></select></div>
+                <div class="field"><label>Pesquisar</label><input class="form-control" id="queueSearch" placeholder="Empresa, cidade, ação..." /></div>
+              </div>
+              <div class="table-wrap"><table class="workflow-table"><thead><tr><th>Concedente</th><th>Marca</th><th>Responsável</th><th>Prioridade</th><th>Próxima ação</th><th>Prazo</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="queueTableBody"></tbody></table></div>
+            </div>
+          </section>
+          <section class="panel" id="panel-qualidade">
+            <div class="panel-header"><div><h2>Qualidade dos dados</h2><p>Localize cadastros incompletos ou que precisam de revisão.</p></div></div>
+            <div class="workflow-grid" id="qualityMetrics"></div>
+            <div class="card" style="margin-top:14px">
+              <div class="workflow-toolbar">
+                <div class="field"><label>Tipo de pendência</label><select class="form-control" id="qualityIssueFilter"><option value="">Todas</option><option value="email">E-mail</option><option value="telefone">Telefone</option><option value="marca">Marca</option><option value="vigencia">Vigência</option><option value="cnpj">CNPJ</option><option value="contatos">Contatos</option><option value="situacao-cadastral">Situação cadastral</option><option value="endereco">Endereço</option><option value="responsavel">Responsável</option></select></div>
+                <div class="field"><label>Pesquisar</label><input class="form-control" id="qualitySearch" placeholder="Empresa, CNPJ ou cidade..." /></div>
+              </div>
+              <div class="table-wrap"><table class="workflow-table"><thead><tr><th>Concedente</th><th>Marca</th><th>Localização</th><th>Pendências</th><th>Ação</th></tr></thead><tbody id="qualityTableBody"></tbody></table></div>
+            </div>
+          </section>`);
+      }
+
+      if ($('#dashboardMetrics') && !$('#brandDashboardSummary')) {
+        $('#dashboardMetrics').insertAdjacentHTML('afterend', '<div id="brandDashboardSummary" class="workflow-brand-grid"></div>');
+      }
+      const recentCard = $('#recentActivities')?.closest('.card');
+      if (recentCard && !$('#backupDashboardMonitor')) {
+        recentCard.insertAdjacentHTML('afterend', '<div class="card" id="backupDashboardMonitor" data-admin-only style="margin-top:16px"></div>');
+      }
+
+      const companyGrid = $('#companyForm .form-grid');
+      const brandField = $('#marcaConvenioGroup')?.closest('.field');
+      if (companyGrid && brandField && !$('#responsavelAcompanhamento')) {
+        brandField.insertAdjacentHTML('afterend', `
+          <div class="field"><label>Responsável pelo acompanhamento</label><input class="form-control" id="responsavelAcompanhamento" placeholder="Nome do responsável" /></div>
+          <div class="field"><label>Prioridade</label><select class="form-control" id="prioridade"><option>Baixa</option><option selected>Média</option><option>Alta</option><option>Urgente</option></select></div>`);
+      }
+
+      const filtersGrid = $('#filtersCard .filters-grid');
+      const filtersActions = filtersGrid?.querySelector('.filters-actions');
+      if (filtersGrid && filtersActions && !$('#filterResponsavel')) {
+        filtersActions.insertAdjacentHTML('beforebegin', '<div class="field"><label>Responsável</label><select class="form-control filter" id="filterResponsavel"><option value="">Todos</option></select></div><div class="field"><label>Prioridade</label><select class="form-control filter" id="filterPrioridade"><option value="">Todas</option><option>Urgente</option><option>Alta</option><option>Média</option><option>Baixa</option></select></div>');
+      }
+
+      const tableHeaderRow = $('#companiesTableBody')?.closest('table')?.querySelector('thead tr');
+      if (tableHeaderRow && !tableHeaderRow.querySelector('[data-sort="responsavelOperacional"]')) {
+        const actionHeader = tableHeaderRow.lastElementChild;
+        actionHeader?.insertAdjacentHTML('beforebegin', '<th data-sort="responsavelOperacional">Responsável</th><th data-sort="prioridade">Prioridade</th><th data-sort="proximaAcao">Próxima ação</th><th data-sort="proximaData">Próximo contato</th>');
+      }
+
+      const timeline = $('#contactTimeline');
+      if (timeline && !$('#emailCommunicationTimeline')) {
+        timeline.insertAdjacentHTML('afterend', '<div id="emailCommunicationTimeline"></div>');
+      }
+
+      const settingsGrid = $('#panel-configuracoes .settings-grid');
+      if (settingsGrid && !$('#emailTemplatesSettingsCard')) {
+        settingsGrid.insertAdjacentHTML('beforeend', `
+          <div class="card settings-wide" id="emailTemplatesSettingsCard" data-admin-only>
+            <div class="card-title"><div><h3>Modelos de e-mail</h3><span>Textos, situação posterior e prazo de acompanhamento</span></div><button class="btn btn-sm btn-secondary" id="refreshEmailTemplates" type="button"><i class="fa-solid fa-rotate"></i>Atualizar</button></div>
+            <div class="template-list" id="emailTemplatesList"></div>
+          </div>`);
+      }
+
+      if (!$('#emailTemplateModalBackdrop')) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div class="modal-backdrop" id="emailTemplateModalBackdrop" data-admin-only aria-hidden="true">
+            <div class="modal lg"><form id="emailTemplateForm">
+              <div class="modal-header"><div><h3>Editar modelo de e-mail</h3><p class="modal-subtitle" id="emailTemplateSubtitle"></p></div><button class="icon-btn" type="button" data-close="emailTemplateModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div>
+              <div class="modal-body"><input type="hidden" id="emailTemplateId"><div class="form-grid">
+                <div class="field"><label>Situação</label><input class="form-control" id="emailTemplateSituation" readonly></div>
+                <div class="field"><label>Marca</label><input class="form-control" id="emailTemplateBrand" readonly></div>
+                <div class="field span-3"><label>Título <span class="required">*</span></label><input class="form-control" id="emailTemplateSubject" required></div>
+                <div class="field span-3"><label>Corpo <span class="required">*</span></label><textarea class="form-control" id="emailTemplateBody" rows="15" required></textarea><span class="field-hint">Variáveis: {{MARCA}}, {{LOCAL}}, {{SAUDACAO}}, {{RAZAO_SOCIAL}}, {{CNPJ}}, {{CIDADE}}, {{ESTADO}}, {{FIM_VIGENCIA}}, {{USUARIO_RESPONSAVEL}}</span></div>
+                <div class="field"><label>Situação após confirmação</label><select class="form-control" id="emailTemplateNextStatus"></select></div>
+                <div class="field span-2"><label>Próxima ação</label><input class="form-control" id="emailTemplateNextAction"></div>
+                <div class="field"><label>Dias para próximo contato</label><input class="form-control" id="emailTemplateNextDays" type="number" min="0" max="365"></div>
+                <div class="field"><label><input type="checkbox" id="emailTemplateActive"> Modelo ativo</label></div>
+              </div></div>
+              <div class="modal-footer"><button type="button" class="btn btn-secondary" data-close="emailTemplateModalBackdrop">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>Salvar modelo</button></div>
+            </form></div>
+          </div>`);
+      }
+
+      if (!$('#emailSendConfirmationBackdrop')) {
+        document.body.insertAdjacentHTML('beforeend', `
+          <div class="modal-backdrop" id="emailSendConfirmationBackdrop" aria-hidden="true">
+            <div class="modal sm"><div class="modal-header"><div><h3>Confirmar envio do e-mail</h3><p class="modal-subtitle">O Outlook foi aberto para validação e envio.</p></div></div>
+              <div class="modal-body"><div class="summary-box"><i class="fa-solid fa-envelope-circle-check"></i>O e-mail foi realmente enviado no Outlook?</div><div class="send-confirm-summary" id="emailSendConfirmationSummary" style="margin-top:14px"></div></div>
+              <div class="modal-footer"><button class="btn btn-secondary" id="emailNotSentBtn" type="button">Não foi enviado</button><button class="btn btn-primary" id="emailSentBtn" type="button"><i class="fa-solid fa-check"></i>Sim, registrar envio</button></div>
+            </div>
+          </div>`);
+      }
+    }
+
+    async function loadEmailTemplates({ silent = true } = {}) {
+      if (!window.remoteData?.listEmailTemplates || state.emailTemplatesLoading || !window.currentUser?.id) return;
+      state.emailTemplatesLoading = true;
+      try {
+        const templates = await window.remoteData.listEmailTemplates();
+        state.emailTemplates = Array.isArray(templates) && templates.length ? templates : fallbackEmailTemplates();
+        state.workflowSchemaReady = true;
+      } catch (error) {
+        state.emailTemplates = fallbackEmailTemplates();
+        state.workflowSchemaReady = false;
+        if (!silent) toast('warning','Modelos padrão carregados',error.message || 'A tabela de modelos ainda não está disponível.');
+      } finally {
+        state.emailTemplatesLoading = false;
+        renderEmailTemplatesSettings();
+      }
+    }
+
+    const baseLoadRemoteDataV860 = loadRemoteData;
+    loadRemoteData = async function(options = {}) {
+      await baseLoadRemoteDataV860(options);
+      await loadEmailTemplates({ silent: true });
+      renderAll();
+    };
+
+    const baseResetCompanyFormV860 = resetCompanyForm;
+    resetCompanyForm = function() {
+      baseResetCompanyFormV860();
+      if ($('#responsavelAcompanhamento')) $('#responsavelAcompanhamento').value = window.currentUser?.nome || '';
+      if ($('#prioridade')) $('#prioridade').value = 'Média';
+    };
+
+    const baseOpenCompanyFormV860 = openCompanyForm;
+    openCompanyForm = function(id = null, preset = null) {
+      baseOpenCompanyFormV860(id, preset);
+      const company = id ? state.data.concedentes.find((item) => item.id === id) : preset;
+      if ($('#responsavelAcompanhamento')) $('#responsavelAcompanhamento').value = company?.responsavelAcompanhamento || window.currentUser?.nome || '';
+      if ($('#prioridade')) $('#prioridade').value = company?.prioridade || 'Média';
+    };
+
+    const baseGetCompanyFormDataV860 = getCompanyFormData;
+    getCompanyFormData = function() {
+      const company = baseGetCompanyFormDataV860();
+      company.responsavelAcompanhamento = $('#responsavelAcompanhamento')?.value.trim() || '';
+      company.prioridade = $('#prioridade')?.value || 'Média';
+      return normalizeCompany(company);
+    };
+
+    const baseRenderDashboardV860 = renderDashboard;
+    renderDashboard = function() {
+      baseRenderDashboardV860();
+      renderBrandDashboard();
+      renderBackupDashboardMonitor();
+    };
+
+    function renderBrandDashboard() {
+      const holder = $('#brandDashboardSummary');
+      if (!holder) return;
+      holder.innerHTML = marcasConvenio.map((brand) => {
+        const rows = state.data.concedentes.map(normalizeCompany).filter((item) => item.marca === brand);
+        const renewed = rows.filter((item) => item.situacao === 'Renovado').length;
+        const pending = rows.filter((item) => !closedWorkflowStatuses.has(item.situacao)).length;
+        const expiring = rows.filter((item) => ['Próximo do vencimento','Vencimento crítico','Vencido'].includes(item.situacaoVigencia)).length;
+        const rate = rows.length ? Math.round((renewed / rows.length) * 100) : 0;
+        return `<article class="card workflow-brand-card"><div class="brand-head"><strong>${escapeHTML(brand)}</strong><span class="badge badge-blue">${rows.length} convênios</span></div><div class="workflow-brand-stats"><div class="workflow-stat"><span>Renovados</span><strong>${renewed}</strong></div><div class="workflow-stat"><span>Em andamento</span><strong>${pending}</strong></div><div class="workflow-stat"><span>Prazo crítico</span><strong>${expiring}</strong></div><div class="workflow-stat"><span>Taxa de renovação</span><strong>${rate}%</strong></div></div></article>`;
+      }).join('');
+    }
+
+    function renderBackupDashboardMonitor() {
+      const holder = $('#backupDashboardMonitor');
+      if (!holder || !isAdmin()) return;
+      const clock = saoPauloClock();
+      const automatic = state.exportHistory.filter((item) => item.origem === 'automatica');
+      const latest = automatic[0] || null;
+      const todayFiles = automatic.filter((item) => String(item.arquivo_nome || '').includes(clock.dateKey));
+      const todayOk = todayFiles.some((item) => String(item.tipo || '').includes('backup-json'));
+      holder.className = `card ${todayOk ? 'backup-monitor-ok' : 'backup-monitor-warning'}`;
+      holder.innerHTML = `<div class="card-title"><div><h3>Monitoramento do backup</h3><span>${todayOk ? 'Cópia diária concluída' : 'Cópia diária pendente'}</span></div><span class="badge ${todayOk ? 'badge-success' : 'badge-warning'}"><i class="fa-solid ${todayOk ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>${todayOk ? 'Concluído' : 'Verificar'}</span></div><div class="setting-row"><div><strong>Última execução automática</strong><small>${latest?.criado_em ? new Date(latest.criado_em).toLocaleString('pt-BR') : 'Nenhuma execução encontrada.'}</small></div><span class="badge badge-muted">${todayFiles.length} arquivo(s) hoje</span></div><div class="setting-row"><div><strong>Ação rápida</strong><small>Gere novamente o JSON e as planilhas quando necessário.</small></div><button class="btn btn-secondary" id="dashboardRunBackup" type="button"><i class="fa-solid fa-play"></i>Executar agora</button></div>`;
+      if (!state.exportHistoryLoadedAt && !state.exportHistoryLoading) {
+        loadExportHistory({ silent: true }).then(renderBackupDashboardMonitor);
+      }
+    }
+
+    const baseRenderCompaniesV860 = renderCompanies;
+    renderCompanies = function() {
+      baseRenderCompaniesV860();
+      const total = state.filtered.length;
+      const start = (state.page - 1) * state.pageSize;
+      const currentRows = state.filtered.slice(start, start + state.pageSize);
+      const tableRows = $$('#companiesTableBody tr');
+      tableRows.forEach((row, index) => {
+        if (!currentRows[index] || row.children.length <= 1) {
+          row.firstElementChild?.setAttribute('colspan','30');
+          return;
+        }
+        if (row.querySelector('[data-workflow-cell]')) return;
+        const company = normalizeCompany(currentRows[index]);
+        const actionCell = row.lastElementChild;
+        actionCell?.insertAdjacentHTML('beforebegin', `<td data-workflow-cell>${escapeHTML(company.responsavelOperacional || '—')}</td><td data-workflow-cell>${priorityBadge(company.prioridade)}</td><td data-workflow-cell class="td-truncate" title="${escapeHTML(company.proximaAcao || '')}">${escapeHTML(company.proximaAcao || '—')}</td><td data-workflow-cell>${formatDate(company.proximaData)}</td>`);
+      });
+      if ($('#resultCount')) $('#resultCount').title = `${total} cadastro(s) após os filtros operacionais`;
+    };
+
+    const baseRenderContactsPanelV860 = renderContactsPanel;
+    renderContactsPanel = function() {
+      baseRenderContactsPanelV860();
+      const company = state.data.concedentes.find((item) => item.id === state.selectedContactCompanyId);
+      const holder = $('#emailCommunicationTimeline');
+      if (!holder) return;
+      holder.innerHTML = company ? renderEmailCommunicationHistory(company) : '';
+    };
+
+    const baseRenderKanbanV860 = renderKanban;
+    renderKanban = function() {
+      baseRenderKanbanV860();
+      $$('.kanban-card').forEach((card) => {
+        const company = state.data.concedentes.find((item) => item.id === card.dataset.id);
+        if (!company || card.querySelector('.workflow-kanban-meta')) return;
+        const heading = card.querySelector('h4');
+        heading?.insertAdjacentHTML('afterend', `<div class="workflow-kanban-meta" style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0">${priorityBadge(company.prioridade)}<span class="badge badge-muted"><i class="fa-solid fa-user"></i>${escapeHTML(company.responsavelOperacional || 'Sem responsável')}</span></div>`);
+      });
+    };
+
+    const baseRenderSettingsV860 = renderSettings;
+    renderSettings = function() {
+      baseRenderSettingsV860();
+      renderEmailTemplatesSettings();
+    };
+
+    const baseViewCompanyV860 = viewCompany;
+    viewCompany = function(id) {
+      baseViewCompanyV860(id);
+      const company = state.data.concedentes.find((item) => item.id === id);
+      if (!company || !$('#viewModalBody')) return;
+      const workflow = workflowDateInfo(company);
+      $('#viewModalBody').insertAdjacentHTML('afterbegin', `<div class="summary-box" style="margin-bottom:14px"><i class="fa-solid fa-list-check"></i><span><strong>Gestão do acompanhamento:</strong> ${escapeHTML(workflow.responsible || 'Sem responsável')} • ${escapeHTML(workflow.priority)} • ${escapeHTML(workflow.nextAction)} • ${formatDate(workflow.nextDate)}</span></div>`);
+      $('#viewModalBody').insertAdjacentHTML('beforeend', renderEmailCommunicationHistory(company));
+    };
+
+    function renderEmailCommunicationHistory(company) {
+      const communications = [...(company.comunicacoes || [])].sort((a,b) => String(b.preparadoEm || b.criadoEm || '').localeCompare(String(a.preparadoEm || a.criadoEm || '')));
+      return `<div class="card-title" style="margin-top:22px"><h3>Comunicações por e-mail (${communications.length})</h3><span>Preparação e confirmação no Outlook</span></div>${communications.length ? `<div class="email-history">${communications.map((item) => `<article class="email-history-item"><div class="email-history-head"><div><strong>${escapeHTML(item.assunto || 'Recado por e-mail')}</strong><small>${escapeHTML(item.destinatario || 'Destinatário não informado')} • ${escapeHTML(item.marca || 'Sem marca')}</small></div><span class="badge ${item.status === 'enviado' ? 'badge-success' : item.status === 'nao_enviado' ? 'badge-danger' : 'badge-warning'}">${item.status === 'enviado' ? 'Envio confirmado' : item.status === 'nao_enviado' ? 'Não enviado' : 'Preparado'}</span></div><small>${item.preparadoEm ? new Date(item.preparadoEm).toLocaleString('pt-BR') : '—'} • ${escapeHTML(item.usuarioNome || 'Usuário')}</small></article>`).join('')}</div>` : emptyState('Nenhum recado preparado','Os recados abertos no Outlook serão registrados aqui.')}`;
+    }
+
+    function renderWorkQueue() {
+      const holder = $('#queueTableBody');
+      if (!holder) return;
+      const currentName = String(window.currentUser?.nome || '').trim();
+      const scope = $('#queueScope')?.value || 'mine';
+      const due = $('#queueDue')?.value || '';
+      const priority = $('#queuePriority')?.value || '';
+      const search = normalize($('#queueSearch')?.value || '');
+      let rows = state.data.concedentes.map(normalizeCompany).filter((company) => !closedWorkflowStatuses.has(company.situacao));
+      if (scope === 'mine') rows = rows.filter((company) => normalize(company.responsavelOperacional) === normalize(currentName));
+      if (scope === 'unassigned') rows = rows.filter((company) => !company.responsavelOperacional);
+      if (due) rows = rows.filter((company) => workflowDateInfo(company).category === due);
+      if (priority) rows = rows.filter((company) => company.prioridade === priority);
+      if (search) rows = rows.filter((company) => normalize([company.razaoSocial,company.nomeFantasia,company.cnpj,company.cidade,company.proximaAcao].join(' ')).includes(search));
+      rows.sort((a,b) => {
+        const priorityCompare = (priorityOrder[a.prioridade] ?? 9) - (priorityOrder[b.prioridade] ?? 9);
+        if (priorityCompare) return priorityCompare;
+        return String(a.proximaData || '9999-12-31').localeCompare(String(b.proximaData || '9999-12-31'));
+      });
+      const allOpen = state.data.concedentes.map(normalizeCompany).filter((company) => !closedWorkflowStatuses.has(company.situacao));
+      const metrics = [
+        ['Atrasados',allOpen.filter((c)=>workflowDateInfo(c).category==='atrasado').length,'fa-triangle-exclamation'],
+        ['Para hoje',allOpen.filter((c)=>workflowDateInfo(c).category==='hoje').length,'fa-calendar-day'],
+        ['Próximos 7 dias',allOpen.filter((c)=>workflowDateInfo(c).category==='proximos-7').length,'fa-calendar-week'],
+        ['Sem responsável',allOpen.filter((c)=>!c.responsavelOperacional).length,'fa-user-slash']
+      ];
+      $('#queueMetrics').innerHTML = metrics.map(([label,value,icon])=>`<div class="workflow-card"><span>${label}</span><strong>${value}</strong><i class="fa-solid ${icon}" style="float:right;color:var(--muted)"></i></div>`).join('');
+      holder.innerHTML = rows.length ? rows.map((company) => {
+        const info = workflowDateInfo(company);
+        const dueClass = info.category === 'atrasado' ? 'workflow-due-overdue' : info.category === 'hoje' ? 'workflow-due-today' : info.category === 'proximos-7' ? 'workflow-due-upcoming' : '';
+        return `<tr><td><strong>${escapeHTML(company.nomeFantasia || company.razaoSocial)}</strong><small>${escapeHTML(company.cnpj || 'Sem CNPJ')} • ${escapeHTML(company.cidade)}/${escapeHTML(company.estado)}</small></td><td>${escapeHTML(company.marca || '—')}</td><td>${escapeHTML(info.responsible || 'Sem responsável')}</td><td>${priorityBadge(info.priority)}</td><td>${escapeHTML(info.nextAction)}</td><td class="${dueClass}">${formatDate(info.nextDate)}</td><td>${badgeForSituacao(company.situacao)}</td><td><div class="workflow-actions">${!info.responsible && canEdit()?`<button class="btn btn-sm btn-primary" data-queue-claim="${company.id}"><i class="fa-solid fa-hand"></i>Assumir</button>`:''}<button class="btn btn-sm btn-secondary" data-queue-contact="${company.id}" title="Registrar contato"><i class="fa-solid fa-phone"></i></button>${supportsStandardOutlookMessage(company)?`<button class="btn btn-sm btn-secondary" data-queue-email="${company.id}" title="Preparar recado"><i class="fa-solid fa-envelope"></i></button>`:''}<button class="btn btn-sm btn-secondary" data-queue-edit="${company.id}" title="Editar"><i class="fa-solid fa-pen"></i></button></div></td></tr>`;
+      }).join('') : `<tr><td colspan="8">${emptyState('Nenhuma ação nesta fila','Altere os filtros ou defina responsáveis e datas nos contatos.')}</td></tr>`;
+    }
+
+    function renderDataQuality() {
+      const holder = $('#qualityTableBody');
+      if (!holder) return;
+      const issueFilter = $('#qualityIssueFilter')?.value || '';
+      const search = normalize($('#qualitySearch')?.value || '');
+      const records = state.data.concedentes.map(normalizeCompany).map((company) => ({ company, issues: dataQualityIssues(company) }));
+      const withIssues = records.filter((item) => item.issues.length);
+      const filtered = withIssues.filter((item) => {
+        if (issueFilter && !item.issues.some((issue) => issue.key === issueFilter)) return false;
+        if (search && !normalize([item.company.razaoSocial,item.company.nomeFantasia,item.company.cnpj,item.company.cidade].join(' ')).includes(search)) return false;
+        return true;
+      }).sort((a,b) => b.issues.length - a.issues.length);
+      const metrics = [
+        ['Cadastros com pendência',withIssues.length,'fa-list-circle-check'],
+        ['Sem e-mail válido',records.filter((x)=>x.issues.some((i)=>i.key==='email')).length,'fa-envelope-circle-xmark'],
+        ['Sem vigência',records.filter((x)=>x.issues.some((i)=>i.key==='vigencia')).length,'fa-calendar-xmark'],
+        ['Sem responsável',records.filter((x)=>x.issues.some((i)=>i.key==='responsavel')).length,'fa-user-slash']
+      ];
+      $('#qualityMetrics').innerHTML = metrics.map(([label,value,icon])=>`<div class="workflow-card"><span>${label}</span><strong>${value}</strong><i class="fa-solid ${icon}" style="float:right;color:var(--muted)"></i></div>`).join('');
+      holder.innerHTML = filtered.length ? filtered.map(({company,issues})=>`<tr><td><strong>${escapeHTML(company.nomeFantasia || company.razaoSocial)}</strong><small>${escapeHTML(company.cnpj || 'Sem CNPJ')}</small></td><td>${escapeHTML(company.marca || '—')}</td><td>${escapeHTML(company.cidade || '—')}/${escapeHTML(company.estado || '—')}</td><td><div class="quality-tags">${issues.map((issue)=>`<span class="quality-tag">${escapeHTML(issue.label)}</span>`).join('')}</div></td><td><button class="btn btn-sm btn-primary" data-quality-edit="${company.id}"><i class="fa-solid fa-pen"></i>Corrigir cadastro</button></td></tr>`).join('') : `<tr><td colspan="5">${emptyState('Nenhuma pendência encontrada','Os cadastros correspondentes ao filtro estão completos.')}</td></tr>`;
+    }
+
+    function renderEmailTemplatesSettings() {
+      const holder = $('#emailTemplatesList');
+      if (!holder) return;
+      const templates = allEmailTemplates().slice().sort((a,b)=>`${a.situacao}|${a.marca}`.localeCompare(`${b.situacao}|${b.marca}`,'pt-BR'));
+      holder.innerHTML = templates.map((template) => `<article class="template-item"><div><strong>${escapeHTML(template.situacao)} — ${escapeHTML(template.marca)}</strong><small>${escapeHTML(template.titulo)} • Próximo contato em ${Number(template.diasProximoContato || 0)} dia(s) • ${template.ativo === false ? 'Inativo' : 'Ativo'}</small></div><button class="btn btn-sm btn-secondary" data-edit-template="${escapeHTML(template.id)}" type="button"><i class="fa-solid fa-pen"></i>Editar</button></article>`).join('');
+    }
+
+    function openEmailTemplateEditor(id) {
+      if (!ensureAdmin('editar modelos de e-mail')) return;
+      const template = allEmailTemplates().find((item) => String(item.id) === String(id));
+      if (!template) return;
+      $('#emailTemplateId').value = template.id || '';
+      $('#emailTemplateSituation').value = template.situacao || '';
+      $('#emailTemplateBrand').value = template.marca || '';
+      $('#emailTemplateSubject').value = template.titulo || '';
+      $('#emailTemplateBody').value = template.corpo || '';
+      $('#emailTemplateNextStatus').innerHTML = situacoesContato.map((status)=>`<option ${status===template.situacaoAposEnvio?'selected':''}>${escapeHTML(status)}</option>`).join('');
+      $('#emailTemplateNextAction').value = template.proximaAcao || '';
+      $('#emailTemplateNextDays').value = Number(template.diasProximoContato || 0);
+      $('#emailTemplateActive').checked = template.ativo !== false;
+      $('#emailTemplateSubtitle').textContent = `${template.situacao} • ${template.marca}`;
+      openModal('emailTemplateModalBackdrop');
+    }
+
+    async function saveEmailTemplateEditor(event) {
+      event.preventDefault();
+      if (!ensureAdmin('editar modelos de e-mail')) return;
+      const payload = {
+        id: $('#emailTemplateId').value,
+        situacao: $('#emailTemplateSituation').value,
+        marca: $('#emailTemplateBrand').value,
+        titulo: $('#emailTemplateSubject').value.trim(),
+        corpo: $('#emailTemplateBody').value.trim(),
+        situacaoAposEnvio: $('#emailTemplateNextStatus').value,
+        proximaAcao: $('#emailTemplateNextAction').value.trim(),
+        diasProximoContato: Number($('#emailTemplateNextDays').value || 0),
+        ativo: $('#emailTemplateActive').checked
+      };
+      if (!payload.titulo || !payload.corpo) {
+        toast('error','Revise o modelo','Título e corpo são obrigatórios.');
+        return;
+      }
+      const button = $('#emailTemplateForm button[type="submit"]');
+      button.disabled = true;
+      try {
+        const saved = await window.remoteData.saveEmailTemplate(payload);
+        const index = state.emailTemplates.findIndex((item) => item.id === saved.id || (item.situacao === saved.situacao && item.marca === saved.marca));
+        if (index >= 0) state.emailTemplates[index] = saved; else state.emailTemplates.push(saved);
+        closeModal('emailTemplateModalBackdrop');
+        renderEmailTemplatesSettings();
+        toast('success','Modelo atualizado','O próximo recado utilizará o novo texto e as novas regras.');
+      } catch (error) {
+        toast('error','Falha ao salvar modelo',error.message || 'Não foi possível atualizar o modelo.');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    ensureOutlookMessageUI = ((base) => function() {
+      base();
+      ensureWorkflowEnhancementsUI();
+    })(ensureOutlookMessageUI);
+
+    submitOutlookMessage = async function(event) {
+      event.preventDefault();
+      const company = state.data.concedentes.find((item) => item.id === $('#outlookMessageCompanyId')?.value);
+      const brand = selectedOutlookBrand();
+      const recipient = $('#outlookMessageRecipient')?.value.trim() || '';
+      const draft = company && brand ? buildStandardOutlookMessage(company, brand) : null;
+      if (!company || !draft || !isValidOutlookRecipient(recipient)) {
+        setOutlookMessageValidation('Revise a concedente, a marca e o destinatário.', 'error');
+        return;
+      }
+      const popup = window.open('about:blank','_blank');
+      if (!popup) {
+        setOutlookMessageValidation('O navegador bloqueou a nova guia. Libere pop-ups e tente novamente.', 'error');
+        return;
+      }
+      const outlookQuery = [`to=${encodeURIComponent(recipient)}`,`subject=${encodeURIComponent(draft.subject)}`,`body=${encodeURIComponent(draft.body)}`].join('&');
+      const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?${outlookQuery}`;
+      let communication = null;
+      try {
+        communication = await window.remoteData.createEmailCommunication?.({
+          companyId: company.id,
+          templateId: draft.template?.fallback ? null : draft.template?.id,
+          marca: brand,
+          situacaoOrigem: company.situacao,
+          destinatario: recipient,
+          assunto: draft.subject,
+          corpo: draft.body,
+          status: 'preparado',
+          usuarioId: window.currentUser?.id || null,
+          usuarioNome: window.currentUser?.nome || '',
+          usuarioEmail: window.currentUser?.email || ''
+        });
+        if (communication) {
+          company.comunicacoes = company.comunicacoes || [];
+          company.comunicacoes.unshift(communication);
+        }
+      } catch (error) {
+        console.warn('[E-mail] Não foi possível registrar a preparação:', error);
+      }
+      popup.location.href = outlookUrl;
+      try { popup.opener = null; } catch {}
+      state.pendingEmail = { companyId: company.id, recipient, draft, communicationId: communication?.id || null };
+      closeModal('outlookMessageModalBackdrop');
+      $('#emailSendConfirmationSummary').innerHTML = `<strong>${escapeHTML(company.nomeFantasia || company.razaoSocial)}</strong><span>${escapeHTML(recipient)}</span><span>${escapeHTML(draft.subject)}</span>`;
+      setTimeout(() => openModal('emailSendConfirmationBackdrop'), 500);
+      toast('success','Recado preparado','Revise o conteúdo no Outlook e confirme o envio no sistema.');
+    };
+
+    async function confirmOutlookEmail(sent) {
+      const pending = state.pendingEmail;
+      state.pendingEmail = null;
+      closeModal('emailSendConfirmationBackdrop');
+      if (!pending) return;
+      const company = state.data.concedentes.find((item) => item.id === pending.companyId);
+      if (!company) return;
+      try {
+        if (pending.communicationId) {
+          const updated = await window.remoteData.updateEmailCommunicationStatus?.(pending.communicationId, sent ? 'enviado' : 'nao_enviado');
+          if (updated) {
+            const index = (company.comunicacoes || []).findIndex((item) => item.id === updated.id);
+            if (index >= 0) company.comunicacoes[index] = updated;
+          }
+        }
+        if (!sent) {
+          renderAll();
+          toast('info','Envio não registrado','O recado permaneceu no histórico como não enviado.');
+          return;
+        }
+        const template = pending.draft.template || {};
+        const now = new Date();
+        const contact = {
+          id: uid(),
+          data: todayISO(),
+          horario: now.toTimeString().slice(0,5),
+          responsavel: window.currentUser?.nome || window.currentUser?.email || 'Usuário',
+          forma: 'E-mail',
+          pessoa: pending.recipient,
+          resultado: template.situacaoAposEnvio || company.situacao,
+          proximaAcao: template.proximaAcao || 'Acompanhar retorno da concedente',
+          proximaData: Number(template.diasProximoContato || 0) > 0 ? addDaysISO(Number(template.diasProximoContato)) : '',
+          observacoes: `Envio confirmado pelo usuário no Outlook.\nAssunto: ${pending.draft.subject}\nMarca: ${company.marca}`
+        };
+        const saved = await window.remoteData.createContact(company.id, contact, company);
+        company.contatos = company.contatos || [];
+        company.contatos.push(saved);
+        company.situacao = saved.resultado || company.situacao;
+        company.formasContato = [...new Set([...(company.formasContato || []),'E-mail'])];
+        if (!company.responsavelAcompanhamento && window.currentUser?.nome) {
+          const updatedCompany = await window.remoteData.updateCompanyManagement?.(company.id, { responsavelAcompanhamento: window.currentUser.nome, prioridade: company.prioridade || 'Média' });
+          if (updatedCompany) company.responsavelAcompanhamento = updatedCompany.responsavelAcompanhamento;
+        }
+        renderAll();
+        toast('success','Envio registrado','O contato, a próxima ação e o prazo foram atualizados automaticamente.');
+      } catch (error) {
+        console.error('[Confirmação de e-mail]',error);
+        await loadRemoteData({ silent: true });
+        toast('error','Falha ao registrar envio',error.message || 'O e-mail foi enviado, mas o histórico não pôde ser atualizado.');
+      }
+    }
+
+    async function claimQueueCompany(id) {
+      if (!canEdit()) return;
+      const company = state.data.concedentes.find((item) => item.id === id);
+      if (!company) return;
+      try {
+        const saved = await window.remoteData.updateCompanyManagement(id, { responsavelAcompanhamento: window.currentUser?.nome || window.currentUser?.email || '', prioridade: company.prioridade || 'Média' });
+        company.responsavelAcompanhamento = saved?.responsavelAcompanhamento || window.currentUser?.nome || '';
+        renderAll();
+        toast('success','Acompanhamento atribuído','A concedente foi adicionada à sua fila.');
+      } catch (error) {
+        toast('error','Falha ao assumir acompanhamento',error.message || 'Não foi possível atualizar o responsável.');
+      }
+    }
+
+    function bindWorkflowEnhancementEvents() {
+      $('#emailTemplateForm')?.addEventListener('submit', saveEmailTemplateEditor);
+      $('#emailSentBtn')?.addEventListener('click', () => confirmOutlookEmail(true));
+      $('#emailNotSentBtn')?.addEventListener('click', () => confirmOutlookEmail(false));
+      $('#refreshEmailTemplates')?.addEventListener('click', () => loadEmailTemplates({ silent: false }));
+      ['queueScope','queueDue','queuePriority'].forEach((id)=>$('#'+id)?.addEventListener('change',renderWorkQueue));
+      $('#queueSearch')?.addEventListener('input',renderWorkQueue);
+      $('#qualityIssueFilter')?.addEventListener('change',renderDataQuality);
+      $('#qualitySearch')?.addEventListener('input',renderDataQuality);
+      document.addEventListener('click', (event) => {
+        const templateButton = event.target.closest?.('[data-edit-template]');
+        if (templateButton) return openEmailTemplateEditor(templateButton.dataset.editTemplate);
+        const claim = event.target.closest?.('[data-queue-claim]');
+        if (claim) return claimQueueCompany(claim.dataset.queueClaim);
+        const contact = event.target.closest?.('[data-queue-contact]');
+        if (contact) return openContactForm(contact.dataset.queueContact);
+        const email = event.target.closest?.('[data-queue-email]');
+        if (email) return openOutlookMessage(email.dataset.queueEmail);
+        const edit = event.target.closest?.('[data-queue-edit],[data-quality-edit]');
+        if (edit) return openCompanyForm(edit.dataset.queueEdit || edit.dataset.qualityEdit);
+        if (event.target.closest?.('#dashboardRunBackup')) return runAutomaticBackup({ force: true });
+      });
+    }
+
+
+    restoreJSON = function(file) {
+      if (!ensureAdmin('restaurar backups')) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result));
+          if (!parsed || !Array.isArray(parsed.concedentes)) throw new Error('Estrutura inválida');
+          confirmAction('Restaurar backup','Todos os dados operacionais serão substituídos pelo conteúdo do arquivo. Deseja continuar?',async()=>{
+            try {
+              const result = window.remoteData.replaceAllWorkflow
+                ? await window.remoteData.replaceAllWorkflow(parsed.concedentes.map(normalizeCompany), parsed.modelosEmail || [])
+                : await window.remoteData.replaceAll(parsed.concedentes.map(normalizeCompany));
+              await loadRemoteData({silent:true});
+              toast('success','Backup restaurado',`${result.inserted} concedente(s), ${result.contactsInserted} contato(s), ${result.communicationsInserted || 0} comunicação(ões) e ${result.templatesRestored || 0} modelo(s) restaurado(s).`);
+            } catch (error) {
+              toast('error','Falha na restauração',error.message || 'Não foi possível restaurar o backup.');
+            }
+          });
+        } catch (error) {
+          toast('error','Backup inválido','O arquivo JSON não possui uma estrutura compatível.');
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const baseRenderAllV860 = renderAll;
+    renderAll = function() {
+      baseRenderAllV860();
+      const active = $('.panel.active')?.id.replace('panel-','') || '';
+      if (active === 'fila') renderWorkQueue();
+      if (active === 'qualidade') renderDataQuality();
+      renderEmailTemplatesSettings();
+      renderBackupDashboardMonitor();
+    };
+
+    const baseBuildBackupPayloadV860 = buildBackupPayload;
+    buildBackupPayload = function() {
+      const payload = baseBuildBackupPayloadV860();
+      payload.version = 3;
+      payload.totalComunicacoesEmail = state.data.concedentes.reduce((sum, company) => sum + (company.comunicacoes?.length || 0), 0);
+      payload.modelosEmail = allEmailTemplates().filter((item) => !item.fallback);
+      return payload;
+    };
+
     window.conveniosApp = Object.freeze({
       getCompanies: () => state.data.concedentes.map(normalizeCompany),
       switchPanel,
@@ -2809,7 +3554,7 @@
     });
 
     function init() {
-      loadData();setupStaticOptions();ensureOutlookMessageUI();bindEvents();applyTheme();renderAll();updateMigrationSummary();applyAccessRules();
+      loadData();setupStaticOptions();ensureWorkflowEnhancementsUI();ensureOutlookMessageUI();bindEvents();bindWorkflowEnhancementEvents();applyTheme();renderAll();updateMigrationSummary();applyAccessRules();
 
       document.addEventListener('click',(event)=>{
         const restricted=event.target.closest?.('[data-admin-only], .action-delete');
