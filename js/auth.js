@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const AUTH_BUILD = '8.9.2-session-mfa';
+  const AUTH_BUILD = '8.9.3-session-mfa';
 
   const client = window.database?.client || null;
   const roleLabels = {

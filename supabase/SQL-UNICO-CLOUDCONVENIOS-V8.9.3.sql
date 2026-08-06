@@ -1,5 +1,5 @@
 -- ============================================================================
--- CLOUDCONVÊNIOS V8.9.2 — SQL ÚNICO OFICIAL DO SUPABASE
+-- CLOUDCONVÊNIOS V8.9.3 — SQL ÚNICO OFICIAL DO SUPABASE
 -- Projeto: Gestão de Renovações de Convênios / Cloudflare Pages
 --
 -- FINALIDADE
@@ -10,12 +10,12 @@
 --   1. Supabase > SQL Editor > New query;
 --   2. cole ESTE ARQUIVO INTEIRO em uma única página;
 --   3. clique em Run;
---   4. confira o resultado final "CloudConvênios V8.9.2 instalado".
+--   4. confira o resultado final "CloudConvênios V8.9.3 instalado".
 --
 -- IMPORTANTE
 --   • Este script NÃO apaga concedentes, contatos, usuários ou auditoria.
 --   • A regra definitiva de duplicidade é CNPJ normalizado + marca.
---   • MFA/AAL2 permanece obrigatório, de acordo com a aplicação V8.9.2.
+--   • MFA/AAL2 permanece obrigatório, de acordo com a aplicação V8.9.3.
 --   • O agendamento automático de exportação depende de segredo do Cloudflare
 --     e, por segurança, não é gravado diretamente neste arquivo público.
 -- ============================================================================
@@ -3281,7 +3281,7 @@ group by tipo_natureza
 order by tipo_natureza;
 
 -- ============================================================================
--- CONSOLIDAÇÃO FINAL V8.9.2
+-- CONSOLIDAÇÃO FINAL V8.9.3
 -- ============================================================================
 
 begin;
@@ -3313,8 +3313,8 @@ create table if not exists public.cloudconvenios_schema_version (
 insert into public.cloudconvenios_schema_version (id, versao, descricao, aplicado_em)
 values (
   1,
-  '8.9.2',
-  'SQL único consolidado, idempotente e alinhado ao Cloudflare Pages',
+  '8.9.3',
+  'SQL único consolidado e alinhado à versão V8.9.3 do Dashboard regional',
   now()
 )
 on conflict (id) do update
@@ -3381,7 +3381,7 @@ as $$
   select jsonb_build_object(
     'status', 'ok',
     'database_time', now(),
-    'schema_version', '8.9.2-sql-unico',
+    'schema_version', '8.9.3-sql-unico',
     'concedentes', (select count(*) from public.concedentes),
     'usuarios_ativos', (select count(*) from public.usuarios where ativo = true),
     'mfa_required', true
@@ -3398,7 +3398,7 @@ commit;
 -- RESULTADO FINAL / CONFERÊNCIA
 -- ============================================================================
 select jsonb_build_object(
-  'resultado', 'CloudConvênios V8.9.2 instalado',
+  'resultado', 'CloudConvênios V8.9.3 instalado',
   'diagnostico', public.healthcheck(),
   'tabelas_publicas', (
     select count(*)

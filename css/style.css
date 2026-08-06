@@ -1408,7 +1408,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 }
 
 
-/* V8.9.2 — Supabase consolidado em SQL único e pacote organizado */
+/* V8.9.3 — Dashboard interativo, região global e nomenclatura padronizada */
 .brand-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .brand-choice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;transition:.2s}
 .brand-choice:hover{border-color:var(--primary);transform:translateY(-1px)}
@@ -1420,3 +1420,130 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 #companiesTable th,#companiesTable td{white-space:nowrap}
 #companiesTable th[data-sort="naturezaJuridica"],#companiesTable td:nth-child(8),#companiesTable th[data-sort="cnaePrincipal"],#companiesTable td:nth-child(10){min-width:230px;max-width:320px}
 @media(max-width:700px){.brand-choice-grid{grid-template-columns:1fr}}
+
+/* V8.9.3 — Dashboard interativo e filtro global de região */
+.dashboard-metrics-sequenced {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dashboard-metric-section-title {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin: 2px 0 -3px;
+}
+.dashboard-filter-card {
+  appearance: none;
+  width: 100%;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.dashboard-filter-card:hover {
+  border-color: rgba(29, 25, 52, .38);
+  transform: translateY(-1px);
+}
+.dashboard-filter-card:focus-visible {
+  outline: 3px solid rgba(255, 198, 41, .55);
+  outline-offset: 2px;
+}
+.dashboard-filter-card.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(29, 25, 52, .12);
+}
+.dashboard-filter-card .dashboard-filter-indicator {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--muted);
+  opacity: .42;
+}
+.dashboard-filter-card.is-selected .dashboard-filter-indicator {
+  color: var(--primary);
+  background: rgba(255, 198, 41, .35);
+  opacity: 1;
+}
+.dashboard-filter-card .metric-hint {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.dashboard-filter-summary {
+  min-height: 48px;
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dashboard-filter-summary > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+}
+.dashboard-filter-summary > div > i { grid-row: 1 / span 2; color: var(--primary); }
+.dashboard-filter-summary span { font-size: 12px; }
+.dashboard-filter-summary small { color: var(--muted); font-size: 10px; }
+.global-region-filter {
+  min-width: 155px;
+  display: grid;
+  gap: 2px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.global-region-filter > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.global-region-filter select {
+  min-width: 130px;
+  height: 27px;
+  padding: 0 26px 0 0;
+  border: 0;
+  background-color: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+.global-region-filter select:focus { box-shadow: none; }
+#brandDashboardSummary { display: none !important; }
+
+@media (max-width: 1350px) {
+  .dashboard-metrics-sequenced { grid-template-columns: repeat(5, minmax(125px, 1fr)); }
+  .dashboard-filter-card { min-height: 116px; padding: 14px; }
+}
+@media (max-width: 1120px) {
+  .dashboard-metrics-sequenced { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .global-region-filter { min-width: 130px; }
+  .global-region-filter select { min-width: 105px; }
+  .dashboard-metrics-sequenced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .global-region-filter { order: 8; width: 100%; grid-template-columns: auto 1fr; align-items: center; }
+  .global-region-filter select { width: 100%; }
+  .dashboard-metrics-sequenced { grid-template-columns: 1fr; }
+  .dashboard-filter-summary { align-items: stretch; flex-direction: column; }
+  .dashboard-filter-summary .btn { width: 100%; }
+}
+

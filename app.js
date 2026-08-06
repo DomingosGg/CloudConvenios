@@ -5500,6 +5500,450 @@
       document.addEventListener('auth:signed-out',()=>{state.flowRules=[];state.operators=[];state.myMentions=[];state.goals=[];state.undoOperations=[];state.maintenance={ativo:false,mensagem:'',inicioEm:'',fimEm:''};renderMaintenanceMode();});
     }
 
+
+
+    // =====================================================================
+    // V8.9.3 — DASHBOARD INTERATIVO, FILTRO GLOBAL DE REGIÃO E NOMENCLATURA
+    // =====================================================================
+
+    const brazilRegionsV893 = Object.freeze({
+      Norte: ['AC','AM','AP','PA','RO','RR','TO'],
+      Nordeste: ['AL','BA','CE','MA','PB','PE','PI','RN','SE'],
+      'Centro-Oeste': ['DF','GO','MS','MT'],
+      Sudeste: ['ES','MG','RJ','SP'],
+      Sul: ['PR','RS','SC']
+    });
+
+    const brazilStateAliasesV893 = Object.freeze({
+      ACRE:'AC', ALAGOAS:'AL', AMAPA:'AP', AMAZONAS:'AM', BAHIA:'BA', CEARA:'CE',
+      'DISTRITO FEDERAL':'DF', 'ESPIRITO SANTO':'ES', GOIAS:'GO', MARANHAO:'MA',
+      'MATO GROSSO':'MT', 'MATO GROSSO DO SUL':'MS', 'MINAS GERAIS':'MG', PARA:'PA',
+      PARAIBA:'PB', PARANA:'PR', PERNAMBUCO:'PE', PIAUI:'PI', 'RIO DE JANEIRO':'RJ',
+      'RIO GRANDE DO NORTE':'RN', 'RIO GRANDE DO SUL':'RS', RONDONIA:'RO', RORAIMA:'RR',
+      'SANTA CATARINA':'SC', 'SAO PAULO':'SP', SERGIPE:'SE', TOCANTINS:'TO'
+    });
+
+    state.globalRegionFilterV893 = state.globalRegionFilterV893 || '';
+    state.dashboardMetricFilterV893 = state.dashboardMetricFilterV893 || 'total';
+
+    function normalizeStateKeyV893(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+    }
+
+    function companyRegionV893(company) {
+      const stateKey = normalizeStateKeyV893(company?.estado);
+      const uf = stateKey.length === 2 ? stateKey : (brazilStateAliasesV893[stateKey] || '');
+      return Object.entries(brazilRegionsV893).find(([, states]) => states.includes(uf))?.[0] || '';
+    }
+
+    function selectedGlobalRegionV893() {
+      return state.globalRegionFilterV893 || $('#globalRegionFilter')?.value || '';
+    }
+
+    function filterCompaniesByRegionV893(companies) {
+      const region = selectedGlobalRegionV893();
+      if (!region) return companies;
+      return (companies || []).filter((company) => companyRegionV893(company) === region);
+    }
+
+    function regionScopedCompaniesV893() {
+      return filterCompaniesByRegionV893(state.data.concedentes.map(normalizeCompany));
+    }
+
+    function withRegionScopedCompaniesV893(callback) {
+      const region = selectedGlobalRegionV893();
+      if (!region) return callback();
+      const original = state.data.concedentes;
+      state.data.concedentes = filterCompaniesByRegionV893(original);
+      try {
+        return callback();
+      } finally {
+        state.data.concedentes = original;
+      }
+    }
+
+    function dashboardDaysV893(company) {
+      const rawDays = company?.diasRestantes;
+      if (rawDays !== null && rawDays !== undefined && String(rawDays).trim() !== '') {
+        const direct = Number(rawDays);
+        if (Number.isFinite(direct)) return direct;
+      }
+      const calculated = vigenciaInfo(company?.inicioVigencia, company?.fimVigencia)?.days;
+      return calculated === null || calculated === undefined || Number.isNaN(Number(calculated))
+        ? null
+        : Number(calculated);
+    }
+
+    function dashboardMetricDefinitionsV893(baseData) {
+      const inProgressStatuses = new Set([
+        'Contato iniciado',
+        'Documentação solicitada',
+        'Documentação recebida',
+        'Em análise',
+        'Renovação em andamento'
+      ]);
+      const renewed = baseData.filter((company) => company.situacao === 'Renovado');
+      const renewalRate = baseData.length ? Math.round((renewed.length / baseData.length) * 100) : 0;
+      const days = (company) => dashboardDaysV893(company);
+
+      return [
+        {
+          section: 'Fluxo de renovação',
+          key: 'andamento',
+          label: 'Em andamento',
+          icon: 'fa-headset',
+          tone: 'primary',
+          value: baseData.filter((company) => inProgressStatuses.has(company.situacao)).length,
+          filter: (company) => inProgressStatuses.has(company.situacao)
+        },
+        {
+          key: 'nao-contatados',
+          label: 'Não contatados',
+          icon: 'fa-phone-slash',
+          tone: 'orange',
+          value: baseData.filter((company) => company.situacao === 'Não contatado').length,
+          filter: (company) => company.situacao === 'Não contatado'
+        },
+        {
+          key: 'aguardando-retorno',
+          label: 'Aguardando retorno',
+          icon: 'fa-hourglass-half',
+          tone: 'warning',
+          value: baseData.filter((company) => company.situacao === 'Aguardando retorno').length,
+          filter: (company) => company.situacao === 'Aguardando retorno'
+        },
+        {
+          key: 'renovados',
+          label: 'Renovados',
+          icon: 'fa-arrows-rotate',
+          tone: 'success',
+          value: renewed.length,
+          filter: (company) => company.situacao === 'Renovado'
+        },
+        {
+          key: 'taxa-renovacao',
+          label: 'Taxa de renovação',
+          icon: 'fa-percent',
+          tone: 'success',
+          value: `${renewalRate}%`,
+          hint: `${renewed.length} de ${baseData.length}`,
+          filter: (company) => company.situacao === 'Renovado'
+        },
+        {
+          section: 'Vigência dos convênios',
+          key: 'total',
+          label: 'Total',
+          icon: 'fa-file-contract',
+          tone: 'primary',
+          value: baseData.length,
+          filter: () => true
+        },
+        {
+          key: 'vencer-90-mais',
+          label: 'A vencer em 90+ dias',
+          icon: 'fa-calendar-check',
+          tone: 'success',
+          value: baseData.filter((company) => days(company) !== null && days(company) > 90).length,
+          filter: (company) => days(company) !== null && days(company) > 90
+        },
+        {
+          key: 'vencer-60',
+          label: 'A vencer em 60 dias',
+          icon: 'fa-calendar-days',
+          tone: 'warning',
+          value: baseData.filter((company) => days(company) !== null && days(company) > 30 && days(company) <= 90).length,
+          hint: '31 a 90 dias',
+          filter: (company) => days(company) !== null && days(company) > 30 && days(company) <= 90
+        },
+        {
+          key: 'vencer-30',
+          label: 'A vencer em 30 dias',
+          icon: 'fa-clock',
+          tone: 'orange',
+          value: baseData.filter((company) => days(company) !== null && days(company) >= 0 && days(company) <= 30).length,
+          hint: '0 a 30 dias',
+          filter: (company) => days(company) !== null && days(company) >= 0 && days(company) <= 30
+        },
+        {
+          key: 'vencidos',
+          label: 'Vencidos',
+          icon: 'fa-calendar-xmark',
+          tone: 'danger',
+          value: baseData.filter((company) => days(company) !== null && days(company) < 0).length,
+          filter: (company) => days(company) !== null && days(company) < 0
+        }
+      ];
+    }
+
+    function renderDashboardV893() {
+      const brandData = filterCompaniesByBrand(regionScopedCompaniesV893(), '#dashboardBrandFilter');
+      const definitions = dashboardMetricDefinitionsV893(brandData);
+      const validKeys = new Set(definitions.map((item) => item.key));
+      if (!validKeys.has(state.dashboardMetricFilterV893)) state.dashboardMetricFilterV893 = 'total';
+      const activeDefinition = definitions.find((item) => item.key === state.dashboardMetricFilterV893)
+        || definitions.find((item) => item.key === 'total');
+      const selectedData = brandData.filter(activeDefinition.filter);
+      const metricsHolder = $('#dashboardMetrics');
+
+      if (metricsHolder) {
+        metricsHolder.className = 'dashboard-metrics-sequenced';
+        metricsHolder.innerHTML = definitions.map((item) => `${item.section ? `<div class="dashboard-metric-section-title">${escapeHTML(item.section)}</div>` : ''}<button type="button" class="card metric-card dashboard-filter-card ${item.key === activeDefinition.key ? 'is-selected' : ''}" data-tone="${item.tone}" data-dashboard-metric="${item.key}" aria-pressed="${item.key === activeDefinition.key ? 'true' : 'false'}" title="Filtrar todos os gráficos por ${escapeHTML(item.label)}"><div class="metric-top"><div class="metric-icon"><i class="fa-solid ${item.icon}"></i></div><span class="dashboard-filter-indicator"><i class="fa-solid fa-filter"></i></span></div><div class="metric-value">${item.value}</div><div class="metric-label">${escapeHTML(item.label)}</div>${item.hint ? `<div class="metric-hint">${escapeHTML(item.hint)}</div>` : ''}</button>`).join('');
+      }
+
+      const selectedBrand = selectedBrandFilter('#dashboardBrandFilter');
+      const selectedRegion = selectedGlobalRegionV893();
+      const scopeParts = [
+        activeDefinition.label,
+        selectedBrand || 'Ambas as marcas',
+        selectedRegion || 'Todas as regiões'
+      ];
+      const summary = $('#dashboardSelectionSummary');
+      if (summary) {
+        summary.innerHTML = `<div><i class="fa-solid fa-filter"></i><span>Exibindo <strong>${escapeHTML(activeDefinition.label)}</strong> — ${selectedData.length} convênio(s)</span><small>${escapeHTML(scopeParts.slice(1).join(' • '))}</small></div><button type="button" class="btn btn-sm btn-secondary ${activeDefinition.key === 'total' ? 'hidden' : ''}" id="clearDashboardMetric"><i class="fa-solid fa-xmark"></i>Limpar indicador</button>`;
+      }
+
+      const contextText = `${activeDefinition.label} • ${selectedData.length} convênio(s)`;
+      const statusCard = $('#chartStatus')?.closest('.chart-card');
+      const stateCard = $('#chartState')?.closest('.chart-card');
+      const poloCard = $('#chartPolo')?.closest('.chart-card');
+      const upcomingCard = $('#upcomingList')?.closest('.card');
+      if (statusCard) {
+        const title = $('h3', statusCard); if (title) title.textContent = 'Convênios por situação da vigência';
+        const subtitle = $('.card-title span', statusCard); if (subtitle) subtitle.textContent = contextText;
+      }
+      if (stateCard) { const subtitle = $('.card-title span', stateCard); if (subtitle) subtitle.textContent = contextText; }
+      if (poloCard) { const subtitle = $('.card-title span', poloCard); if (subtitle) subtitle.textContent = contextText; }
+      if (upcomingCard) { const subtitle = $('.card-title span', upcomingCard); if (subtitle) subtitle.textContent = contextText; }
+
+      const byStatus = countBy(selectedData, (company) => company.situacaoVigencia);
+      const byState = countBy(selectedData, (company) => company.estado);
+      const byPolo = countBy(selectedData, (company) => company.polo);
+
+      createChart('status', 'chartStatus', {
+        type: 'doughnut',
+        data: { labels: Object.keys(byStatus), datasets: [{ data: Object.values(byStatus), backgroundColor: chartColors(), borderWidth: 0 }] },
+        options: { cutout: '64%', plugins: { legend: { position: 'bottom' } } }
+      });
+
+      const topStates = Object.entries(byState).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      createChart('state', 'chartState', {
+        type: 'bar',
+        data: { labels: topStates.map((item) => item[0]), datasets: [{ label: 'Convênios', data: topStates.map((item) => item[1]), backgroundColor: '#1D1934', borderRadius: 7 }] },
+        options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+
+      const polos = Object.entries(byPolo).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      createChart('polo', 'chartPolo', {
+        type: 'bar',
+        data: { labels: polos.map((item) => item[0]), datasets: [{ label: 'Convênios', data: polos.map((item) => item[1]), backgroundColor: '#FFC629', borderRadius: 7 }] },
+        options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } } }
+      });
+
+      const upcoming = selectedData
+        .filter((company) => company.fimVigencia)
+        .sort((a, b) => parseDate(a.fimVigencia) - parseDate(b.fimVigencia))
+        .slice(0, 7);
+      const upcomingList = $('#upcomingList');
+      if (upcomingList) {
+        upcomingList.innerHTML = upcoming.length
+          ? upcoming.map((company) => {
+              const info = vigenciaInfo(company.inicioVigencia, company.fimVigencia);
+              return `<li class="list-row"><span class="list-dot" style="background:${info.days < 0 ? '#dc2626' : info.days <= 30 ? '#f97316' : '#d9a200'}"></span><div class="list-main"><strong>${escapeHTML(company.nomeFantasia || company.razaoSocial)}</strong><small>${escapeHTML(company.cidade)}/${escapeHTML(company.estado)} • ${badgeForVigencia(company.situacaoVigencia)}</small></div><div class="list-side">${formatDate(company.fimVigencia)}<br>${info.days < 0 ? `há ${Math.abs(info.days)} dias` : `em ${info.days} dias`}</div></li>`;
+            }).join('')
+          : emptyState('Nenhum convênio nesta seleção', 'Escolha outro indicador, marca ou região.');
+      }
+    }
+
+    function ensureDashboardV893UI() {
+      $('#brandDashboardSummary')?.remove();
+      const dashboardMetrics = $('#dashboardMetrics');
+      if (dashboardMetrics && !$('#dashboardSelectionSummary')) {
+        dashboardMetrics.insertAdjacentHTML('afterend', '<div id="dashboardSelectionSummary" class="dashboard-filter-summary" aria-live="polite"></div>');
+      }
+      const topbarSearch = $('.topbar-search');
+      if (topbarSearch && !$('#globalRegionFilter')) {
+        topbarSearch.insertAdjacentHTML('afterend', `<label class="global-region-filter" title="Este filtro é aplicado aos painéis operacionais"><span>Região</span><select class="form-control" id="globalRegionFilter" aria-label="Filtrar todos os painéis por região"><option value="">Todas</option>${Object.keys(brazilRegionsV893).map((region) => `<option value="${region}">${region}</option>`).join('')}</select></label>`);
+      }
+      if ($('#globalRegionFilter')) $('#globalRegionFilter').value = state.globalRegionFilterV893;
+    }
+
+    function refreshRegionDependentPanelsV893() {
+      state.page = 1;
+      const scoped = regionScopedCompaniesV893();
+      if (state.selectedContactCompanyId && !scoped.some((company) => company.id === state.selectedContactCompanyId)) {
+        state.selectedContactCompanyId = scoped[0]?.id || null;
+      }
+      if (state.bulkSelectedIds instanceof Set) {
+        const visibleIds = new Set(scoped.map((company) => company.id));
+        [...state.bulkSelectedIds].forEach((id) => { if (!visibleIds.has(id)) state.bulkSelectedIds.delete(id); });
+      }
+      renderAll();
+      standardizeVisibleTerminologyV893(document.body);
+    }
+
+    function bindDashboardV893Events() {
+      $('#globalRegionFilter')?.addEventListener('change', (event) => {
+        state.globalRegionFilterV893 = event.target.value || '';
+        refreshRegionDependentPanelsV893();
+        toast('success', 'Filtro de região atualizado', state.globalRegionFilterV893 ? `Exibindo dados da região ${state.globalRegionFilterV893}.` : 'Exibindo dados de todas as regiões.');
+      });
+      document.addEventListener('click', (event) => {
+        const metric = event.target.closest?.('[data-dashboard-metric]');
+        if (metric) {
+          const key = metric.dataset.dashboardMetric || 'total';
+          state.dashboardMetricFilterV893 = state.dashboardMetricFilterV893 === key && key !== 'total' ? 'total' : key;
+          renderDashboardV893();
+          standardizeVisibleTerminologyV893($('#panel-dashboard'));
+          return;
+        }
+        if (event.target.closest?.('#clearDashboardMetric')) {
+          state.dashboardMetricFilterV893 = 'total';
+          renderDashboardV893();
+          standardizeVisibleTerminologyV893($('#panel-dashboard'));
+        }
+      });
+    }
+
+    function replaceTerminologyV893(value) {
+      let result = String(value ?? '');
+      const replacements = [
+        ['Empresas concedentes', 'Convênios'],
+        ['empresas concedentes', 'convênios'],
+        ['Cadastrar concedente', 'Cadastrar convênio'],
+        ['cadastrar concedente', 'cadastrar convênio'],
+        ['Nova concedente', 'Novo convênio'],
+        ['nova concedente', 'novo convênio'],
+        ['Editar concedente', 'Editar convênio'],
+        ['editar concedente', 'editar convênio'],
+        ['Excluir concedente', 'Excluir convênio'],
+        ['excluir concedente', 'excluir convênio'],
+        ['Salvar concedente', 'Salvar convênio'],
+        ['salvar concedente', 'salvar convênio'],
+        ['Detalhes da concedente', 'Detalhes do convênio'],
+        ['detalhes da concedente', 'detalhes do convênio'],
+        ['Selecione uma concedente', 'Selecione um convênio'],
+        ['selecione uma concedente', 'selecione um convênio'],
+        ['Nenhuma concedente', 'Nenhum convênio'],
+        ['nenhuma concedente', 'nenhum convênio'],
+        ['A concedente', 'O convênio'],
+        ['a concedente', 'o convênio'],
+        ['Da concedente', 'Do convênio'],
+        ['da concedente', 'do convênio'],
+        ['Uma concedente', 'Um convênio'],
+        ['uma concedente', 'um convênio'],
+        ['Esta concedente', 'Este convênio'],
+        ['esta concedente', 'este convênio'],
+        ['Cada concedente', 'Cada convênio'],
+        ['cada concedente', 'cada convênio'],
+        ['Concedente(s)', 'Convênio(s)'],
+        ['concedente(s)', 'convênio(s)'],
+        ['Concedentes', 'Convênios'],
+        ['concedentes', 'convênios']
+      ];
+      replacements.forEach(([from, to]) => { result = result.split(from).join(to); });
+      if (result.trim() === 'Concedente') result = result.replace('Concedente', 'Convênio');
+      if (result.trim() === 'concedente') result = result.replace('concedente', 'convênio');
+      return result;
+    }
+
+    function standardizeVisibleTerminologyV893(root = document.body) {
+      if (!root) return;
+      const processElement = (element) => {
+        if (!(element instanceof Element)) return;
+        ['placeholder', 'title', 'aria-label'].forEach((attribute) => {
+          if (!element.hasAttribute(attribute)) return;
+          const current = element.getAttribute(attribute);
+          const updated = replaceTerminologyV893(current);
+          if (updated !== current) element.setAttribute(attribute, updated);
+        });
+      };
+      if (root instanceof Element) processElement(root);
+      root.querySelectorAll?.('*').forEach(processElement);
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const tag = node.parentElement?.tagName;
+          if (['SCRIPT', 'STYLE', 'TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+          return node.nodeValue?.includes('concedent') || node.nodeValue?.includes('Concedent')
+            ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_REJECT;
+        }
+      });
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach((node) => {
+        const updated = replaceTerminologyV893(node.nodeValue);
+        if (updated !== node.nodeValue) node.nodeValue = updated;
+      });
+    }
+
+    let terminologyObserverV893 = null;
+    function startTerminologyStandardizerV893() {
+      standardizeVisibleTerminologyV893(document.body);
+      if (terminologyObserverV893) return;
+      terminologyObserverV893 = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const updated = replaceTerminologyV893(node.nodeValue);
+              if (updated !== node.nodeValue) node.nodeValue = updated;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              standardizeVisibleTerminologyV893(node);
+            }
+          });
+          if (mutation.type === 'characterData') {
+            const updated = replaceTerminologyV893(mutation.target.nodeValue);
+            if (updated !== mutation.target.nodeValue) mutation.target.nodeValue = updated;
+          }
+        });
+      });
+      terminologyObserverV893.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+
+    function wrapRegionRendererV893(name, renderer) {
+      return function(...args) {
+        return withRegionScopedCompaniesV893(() => renderer.apply(this, args));
+      };
+    }
+
+    const baseGetFilteredCompaniesV893 = getFilteredCompanies;
+    getFilteredCompanies = function() {
+      return filterCompaniesByRegionV893(baseGetFilteredCompaniesV893());
+    };
+
+    const baseManagementFilteredCompaniesV893 = managementFilteredCompanies;
+    managementFilteredCompanies = function() {
+      return filterCompaniesByRegionV893(baseManagementFilteredCompaniesV893());
+    };
+
+    renderDashboard = renderDashboardV893;
+    renderCompanies = wrapRegionRendererV893('renderCompanies', renderCompanies);
+    renderKanban = wrapRegionRendererV893('renderKanban', renderKanban);
+    renderContactsPanel = wrapRegionRendererV893('renderContactsPanel', renderContactsPanel);
+    renderWorkQueue = wrapRegionRendererV893('renderWorkQueue', renderWorkQueue);
+    renderDataQuality = wrapRegionRendererV893('renderDataQuality', renderDataQuality);
+    renderAlerts = wrapRegionRendererV893('renderAlerts', renderAlerts);
+    renderReports = wrapRegionRendererV893('renderReports', renderReports);
+    renderManagementReport = wrapRegionRendererV893('renderManagementReport', renderManagementReport);
+    renderCalendar = wrapRegionRendererV893('renderCalendar', renderCalendar);
+    renderExceptions = wrapRegionRendererV893('renderExceptions', renderExceptions);
+    renderGoals = wrapRegionRendererV893('renderGoals', renderGoals);
+
+    const baseRenderMyMentionsV893 = renderMyMentions;
+    renderMyMentions = function() {
+      const region = selectedGlobalRegionV893();
+      if (!region) return baseRenderMyMentionsV893();
+      const original = state.myMentions;
+      state.myMentions = (original || []).filter((mention) => companyRegionV893(mention.company) === region);
+      try { return baseRenderMyMentionsV893(); }
+      finally { state.myMentions = original; }
+    };
+
+
     window.conveniosApp = Object.freeze({
       getCompanies: () => state.data.concedentes.map(normalizeCompany),
       switchPanel,
@@ -5522,10 +5966,13 @@
       ensureAdvancedManagementUI();
       ensureLegalNatureClassificationUI();
       runOptionalFeature('interface de automação e colaboração', ensureAutomationSuiteUI);
+      runOptionalFeature('Dashboard e filtro regional V8.9.3', ensureDashboardV893UI);
       bindEvents();
       bindWorkflowEnhancementEvents();
       bindAdvancedManagementEvents();
       runOptionalFeature('eventos de automação e colaboração', bindAutomationSuiteEvents);
+      runOptionalFeature('eventos do Dashboard V8.9.3', bindDashboardV893Events);
+      runOptionalFeature('padronização de nomenclatura V8.9.3', startTerminologyStandardizerV893);
       $('#naturezaJuridica')?.addEventListener('input', updateLegalNatureClassification);
       $('#naturezaJuridica')?.addEventListener('change', updateLegalNatureClassification);
       applyTheme();

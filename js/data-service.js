@@ -205,7 +205,7 @@
       (error.code === 'PGRST204' || error.code === '42703' || normalized.includes('column'))
       && normalized.includes('marca')
     ) {
-      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql e tente novamente.');
+      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.3.sql e tente novamente.');
     }
     return new Error(message);
   }

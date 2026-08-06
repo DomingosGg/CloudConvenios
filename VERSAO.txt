@@ -1,1 +1,1 @@
-8.9.2 - Supabase consolidado em SQL único e pacote GitHub/Cloudflare organizado
+8.9.3 - Dashboard interativo, filtro global por região e nomenclatura Convênios

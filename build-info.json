@@ -2,9 +2,9 @@
   "platform": "Cloudflare Pages",
   "runtime": "Pages Functions",
   "branch": "main",
-  "version": "8.9.2",
-  "build": "8.9.2-single-sql-release",
+  "version": "8.9.3",
+  "build": "8.9.3-dashboard-regional-filters",
   "supabase_project": "uvsilamqohytjuzdjrok",
-  "database_script": "supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql",
+  "database_script": "supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.3.sql",
   "status": "production-ready"
 }

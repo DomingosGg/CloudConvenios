@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.9.2" />
+  <meta name="app-version" content="8.9.3" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1314,7 +1314,6 @@ html[data-theme="dark"] #cnpjLookupStatus.cnpj-status-warning { color: #FFC629; 
 html[data-theme="dark"] .btn-primary { color: #1D1934; }
 html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 
-  
 
     /* Diagnóstico da função de gestão de usuários — correção 7.1 */
     .user-backend-status { margin: 12px 0 16px; transition: var(--transition); }
@@ -1327,8 +1326,242 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
     html[data-theme="dark"] .user-backend-warning { color: #fde68a; }
     html[data-theme="dark"] .user-backend-error { color: #fca5a5; }
 
+/* ================================================================
+   Ajustes V8 — MFA, Kanban, contatos e exportações
+   ================================================================ */
+.auth-code-input {
+  letter-spacing: .42em;
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  padding-left: 2.7rem !important;
+}
+.auth-code-wrap input::placeholder { letter-spacing: .32em; }
+.mfa-enrollment-box {
+  display: grid;
+  grid-template-columns: 180px minmax(0,1fr);
+  gap: 16px;
+  align-items: center;
+  margin: 4px 0 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft, #f7f7fb);
+}
+.mfa-qr-code {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+  border: 8px solid #fff;
+}
+.mfa-secret-box { min-width: 0; display: grid; gap: 9px; }
+.mfa-secret-box > span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.mfa-secret-box code {
+  display: block;
+  word-break: break-all;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.timeline-head-actions { display: flex; align-items: center; gap: 8px; }
+.timeline-edit-contact { flex: 0 0 auto; }
+
+.kanban-wrap { position: relative; }
+.kanban {
+  cursor: ew-resize;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+}
+.kanban.mouse-dragging { cursor: grabbing; user-select: none; scroll-behavior: auto; }
+.kanban::-webkit-scrollbar { height: 7px; }
+.kanban::-webkit-scrollbar-thumb { background: rgba(29,25,52,.24); border-radius: 999px; }
+.kanban::-webkit-scrollbar-track { background: transparent; }
+
+.days-remaining-badge { min-width: 72px; justify-content: center; }
+.table-cell-note { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.settings-wide { grid-column: 1 / -1; }
+.export-history-card .card-title { align-items: center; }
+.export-history-wrap { max-height: 420px; overflow: auto; }
+.export-history-wrap table { min-width: 980px; }
+.export-history-wrap th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.export-history-wrap td:last-child, .export-history-wrap th:last-child { text-align: center; width: 74px; }
+.empty-state.compact { min-height: 110px; padding: 18px; }
+.setting-row code { font-size: 11px; word-break: break-word; }
+
+@media (max-width: 720px) {
+  .mfa-enrollment-box { grid-template-columns: 1fr; justify-items: center; }
+  .mfa-secret-box { width: 100%; }
+}
+
+
+/* V8.4 — rolagem horizontal do Kanban no contêiner correto */
+.kanban-wrap {
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  scroll-behavior: auto;
+}
+.kanban-wrap.mouse-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.kanban-wrap:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+
+/* V8.9.3 — Dashboard interativo, região global e nomenclatura padronizada */
+.brand-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.brand-choice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;transition:.2s}
+.brand-choice:hover{border-color:var(--primary);transform:translateY(-1px)}
+.brand-choice:has(input:checked){border-color:#FFC629;box-shadow:0 0 0 3px rgba(255,198,41,.18)}
+.brand-choice input{accent-color:#1D1934;width:18px;height:18px}
+.brand-choice span{display:grid;gap:2px}.brand-choice small{color:var(--muted);font-size:11px}
+#marcaConvenioGroup.invalid{outline:2px solid var(--danger);outline-offset:4px;border-radius:12px}
+.field-hint-inline{font-size:11px;color:var(--muted);font-weight:400}
+#companiesTable th,#companiesTable td{white-space:nowrap}
+#companiesTable th[data-sort="naturezaJuridica"],#companiesTable td:nth-child(8),#companiesTable th[data-sort="cnaePrincipal"],#companiesTable td:nth-child(10){min-width:230px;max-width:320px}
+@media(max-width:700px){.brand-choice-grid{grid-template-columns:1fr}}
+
+/* V8.9.3 — Dashboard interativo e filtro global de região */
+.dashboard-metrics-sequenced {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dashboard-metric-section-title {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin: 2px 0 -3px;
+}
+.dashboard-filter-card {
+  appearance: none;
+  width: 100%;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.dashboard-filter-card:hover {
+  border-color: rgba(29, 25, 52, .38);
+  transform: translateY(-1px);
+}
+.dashboard-filter-card:focus-visible {
+  outline: 3px solid rgba(255, 198, 41, .55);
+  outline-offset: 2px;
+}
+.dashboard-filter-card.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(29, 25, 52, .12);
+}
+.dashboard-filter-card .dashboard-filter-indicator {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--muted);
+  opacity: .42;
+}
+.dashboard-filter-card.is-selected .dashboard-filter-indicator {
+  color: var(--primary);
+  background: rgba(255, 198, 41, .35);
+  opacity: 1;
+}
+.dashboard-filter-card .metric-hint {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.dashboard-filter-summary {
+  min-height: 48px;
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dashboard-filter-summary > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+}
+.dashboard-filter-summary > div > i { grid-row: 1 / span 2; color: var(--primary); }
+.dashboard-filter-summary span { font-size: 12px; }
+.dashboard-filter-summary small { color: var(--muted); font-size: 10px; }
+.global-region-filter {
+  min-width: 155px;
+  display: grid;
+  gap: 2px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.global-region-filter > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.global-region-filter select {
+  min-width: 130px;
+  height: 27px;
+  padding: 0 26px 0 0;
+  border: 0;
+  background-color: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+.global-region-filter select:focus { box-shadow: none; }
+#brandDashboardSummary { display: none !important; }
+
+@media (max-width: 1350px) {
+  .dashboard-metrics-sequenced { grid-template-columns: repeat(5, minmax(125px, 1fr)); }
+  .dashboard-filter-card { min-height: 116px; padding: 14px; }
+}
+@media (max-width: 1120px) {
+  .dashboard-metrics-sequenced { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .global-region-filter { min-width: 130px; }
+  .global-region-filter select { min-width: 105px; }
+  .dashboard-metrics-sequenced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .global-region-filter { order: 8; width: 100%; grid-template-columns: auto 1fr; align-items: center; }
+  .global-region-filter select { width: 100%; }
+  .dashboard-metrics-sequenced { grid-template-columns: 1fr; }
+  .dashboard-filter-summary { align-items: stretch; flex-direction: column; }
+  .dashboard-filter-summary .btn { width: 100%; }
+}
+
   </style>
-  <link rel="stylesheet" href="./css/style.css?v=8.9.2" />
+  <link rel="stylesheet" href="./css/style.css?v=8.9.3" />
 
 </head>
 <body class="auth-pending">
@@ -1517,7 +1750,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
       <nav class="nav" aria-label="Menu principal">
         <div class="nav-section-title">Gestão</div>
         <button class="nav-item active" data-panel="dashboard"><i class="fa-solid fa-chart-pie"></i><span class="nav-label">Dashboard</span></button>
-        <button class="nav-item" data-panel="concedentes"><i class="fa-solid fa-building"></i><span class="nav-label">Concedentes</span></button>
+        <button class="nav-item" data-panel="concedentes"><i class="fa-solid fa-building"></i><span class="nav-label">Convênios</span></button>
         <button class="nav-item" data-panel="renovacoes"><i class="fa-solid fa-table-columns"></i><span class="nav-label">Renovações</span></button>
         <button class="nav-item" data-panel="contatos"><i class="fa-solid fa-comments"></i><span class="nav-label">Contatos</span></button>
         <button class="nav-item" data-panel="notificacoes"><i class="fa-solid fa-bell"></i><span class="nav-label">Notificações</span></button>
@@ -1537,7 +1770,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
         <button class="icon-btn" id="sidebarToggle" title="Recolher ou expandir menu" aria-label="Recolher ou expandir menu"><i class="fa-solid fa-bars"></i></button>
         <div class="topbar-heading"><h1 id="pageTitle">Dashboard</h1><p id="pageSubtitle">Visão geral dos convênios e atividades.</p></div>
         <div class="topbar-spacer"></div>
-        <div class="topbar-search"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="globalSearch" placeholder="Pesquisar concedentes..." /></div>
+        <div class="topbar-search"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="globalSearch" placeholder="Pesquisar convênios..." /></div>
         <button class="icon-btn" id="themeToggle" title="Alternar tema" aria-label="Alternar tema"><i class="fa-solid fa-moon"></i></button>
         <button class="icon-btn" id="notificationToggle" title="Alertas" aria-label="Abrir alertas"><i class="fa-solid fa-bell"></i><span class="notification-badge" id="alertCount">0</span></button>
         <div class="user-menu" id="userMenu">
@@ -1570,7 +1803,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 
       <main class="content">
         <section class="panel active" id="panel-dashboard">
-          <div class="panel-header"><div><h2>Visão geral</h2><p>Acompanhe vigências, contatos e andamento das renovações.</p></div><div class="panel-actions"><div class="workflow-brand-filter"><label for="dashboardBrandFilter">Marca</label><select class="form-control" id="dashboardBrandFilter"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Cadastrar concedente</button><button class="btn btn-secondary" data-action="export" data-admin-only><i class="fa-solid fa-file-export"></i>Exportar cadastros</button></div></div>
+          <div class="panel-header"><div><h2>Visão geral</h2><p>Acompanhe vigências, contatos e andamento das renovações.</p></div><div class="panel-actions"><div class="workflow-brand-filter"><label for="dashboardBrandFilter">Marca</label><select class="form-control" id="dashboardBrandFilter"><option value="">Ambas as marcas</option><option value="Uniasselvi">Uniasselvi</option><option value="Unicesumar">Unicesumar</option></select></div><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Cadastrar convênio</button><button class="btn btn-secondary" data-action="export" data-admin-only><i class="fa-solid fa-file-export"></i>Exportar cadastros</button></div></div>
           <div class="metrics-grid" id="dashboardMetrics"></div>
           <div class="dashboard-grid">
             <div class="card chart-card"><div class="card-title"><h3>Convênios por situação</h3><span>Atualização automática</span></div><canvas id="chartStatus"></canvas></div>
@@ -1583,7 +1816,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
         </section>
 
         <section class="panel" id="panel-concedentes">
-          <div class="panel-header"><div><h2>Concedentes</h2><p>Cadastre, filtre, atualize e acompanhe todas as empresas concedentes.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Cadastrar concedente</button><button class="btn btn-secondary" id="importBtn" data-admin-only><i class="fa-solid fa-file-import"></i>Importar planilha</button><button class="btn btn-secondary" data-action="export" data-admin-only><i class="fa-solid fa-file-export"></i>Exportar cadastros</button></div></div>
+          <div class="panel-header"><div><h2>Convênios</h2><p>Cadastre, filtre, atualize e acompanhe todos os convênios.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Cadastrar convênio</button><button class="btn btn-secondary" id="importBtn" data-admin-only><i class="fa-solid fa-file-import"></i>Importar planilha</button><button class="btn btn-secondary" data-action="export" data-admin-only><i class="fa-solid fa-file-export"></i>Exportar cadastros</button></div></div>
           <div class="toolbar"><div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="tableSearch" placeholder="Pesquisar por CNPJ, empresa, cidade, polo, e-mail..." /></div><button class="btn btn-soft" id="toggleFilters"><i class="fa-solid fa-filter"></i>Filtros</button></div>
           <div class="card filters-card" id="filtersCard">
             <div class="filters-grid">
@@ -1643,15 +1876,15 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
         </section>
 
         <section class="panel" id="panel-renovacoes">
-          <div class="panel-header"><div><h2>Renovações</h2><p>Arraste os cartões entre as etapas. Para rolar horizontalmente, clique e arraste o fundo do quadro.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Nova concedente</button></div></div>
+          <div class="panel-header"><div><h2>Renovações</h2><p>Arraste os cartões entre as etapas. Para rolar horizontalmente, clique e arraste o fundo do quadro.</p></div><div class="panel-actions"><button class="btn btn-primary" data-action="new-company"><i class="fa-solid fa-plus"></i>Novo convênio</button></div></div>
           <div class="kanban-wrap"><div class="kanban" id="kanbanBoard"></div></div>
         </section>
 
         <section class="panel" id="panel-contatos">
-          <div class="panel-header"><div><h2>Histórico de contatos</h2><p>Consulte todos os registros e próximas ações de cada concedente.</p></div><div class="panel-actions"><button class="btn btn-primary" id="newContactGlobal"><i class="fa-solid fa-phone"></i>Registrar contato</button></div></div>
+          <div class="panel-header"><div><h2>Histórico de contatos</h2><p>Consulte todos os registros e próximas ações de cada convênio.</p></div><div class="panel-actions"><button class="btn btn-primary" id="newContactGlobal"><i class="fa-solid fa-phone"></i>Registrar contato</button></div></div>
           <div class="contact-layout">
-            <div class="card"><div class="search-box" style="margin-bottom:12px"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="contactCompanySearch" placeholder="Pesquisar concedente..." /></div><div class="contact-company-list" id="contactCompanyList"></div></div>
-            <div class="card"><div class="card-title"><div><h3 id="contactTimelineTitle">Selecione uma concedente</h3><span id="contactTimelineSubtitle">O histórico será exibido aqui.</span></div><button class="btn btn-sm btn-primary hidden" id="addContactSelected"><i class="fa-solid fa-plus"></i>Novo contato</button></div><div id="contactTimeline"></div></div>
+            <div class="card"><div class="search-box" style="margin-bottom:12px"><i class="fa-solid fa-magnifying-glass"></i><input class="form-control" id="contactCompanySearch" placeholder="Pesquisar convênio..." /></div><div class="contact-company-list" id="contactCompanyList"></div></div>
+            <div class="card"><div class="card-title"><div><h3 id="contactTimelineTitle">Selecione um convênio</h3><span id="contactTimelineSubtitle">O histórico será exibido aqui.</span></div><button class="btn btn-sm btn-primary hidden" id="addContactSelected"><i class="fa-solid fa-plus"></i>Novo contato</button></div><div id="contactTimeline"></div></div>
           </div>
         </section>
 
@@ -1807,7 +2040,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 
   <div class="modal-backdrop" id="companyModalBackdrop" aria-hidden="true">
     <div class="modal lg company-modal" role="dialog" aria-modal="true" aria-labelledby="companyModalTitle">
-      <div class="modal-header"><div><h3 id="companyModalTitle">Cadastrar concedente</h3><p class="modal-subtitle">Os dados cadastrais podem ser preenchidos automaticamente pelo CNPJ e ajustados manualmente.</p></div><button class="icon-btn" data-close="companyModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="modal-header"><div><h3 id="companyModalTitle">Cadastrar convênio</h3><p class="modal-subtitle">Os dados cadastrais podem ser preenchidos automaticamente pelo CNPJ e ajustados manualmente.</p></div><button class="icon-btn" data-close="companyModalBackdrop" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button></div>
       <form id="companyForm" novalidate>
         <div class="modal-body company-modal-body" id="companyModalBody">
           <input type="hidden" id="companyId" />
@@ -1855,12 +2088,12 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
             <div class="span-3 cnpj-source-box hidden" id="cnpjSourceBox"><i class="fa-solid fa-wand-magic-sparkles"></i><span id="cnpjSourceText"></span></div>
           </div>
         </div>
-        <div class="modal-footer company-modal-footer"><span class="modal-footer-note"><i class="fa-solid fa-pen"></i>Os campos permanecem editáveis; Público/Privado é calculado automaticamente.</span><div class="modal-footer-actions"><button type="button" class="btn btn-secondary" data-close="companyModalBackdrop">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>Salvar concedente</button></div></div>
+        <div class="modal-footer company-modal-footer"><span class="modal-footer-note"><i class="fa-solid fa-pen"></i>Os campos permanecem editáveis; Público/Privado é calculado automaticamente.</span><div class="modal-footer-actions"><button type="button" class="btn btn-secondary" data-close="companyModalBackdrop">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i>Salvar convênio</button></div></div>
       </form>
     </div>
   </div>
 
-  <div class="modal-backdrop" id="viewModalBackdrop" aria-hidden="true"><div class="modal lg"><div class="modal-header"><h3>Detalhes da concedente</h3><button class="icon-btn" data-close="viewModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body" id="viewModalBody"></div><div class="modal-footer"><button class="btn btn-secondary" data-close="viewModalBackdrop">Fechar</button></div></div></div>
+  <div class="modal-backdrop" id="viewModalBackdrop" aria-hidden="true"><div class="modal lg"><div class="modal-header"><h3>Detalhes do convênio</h3><button class="icon-btn" data-close="viewModalBackdrop"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body" id="viewModalBody"></div><div class="modal-footer"><button class="btn btn-secondary" data-close="viewModalBackdrop">Fechar</button></div></div></div>
 
   <div class="modal-backdrop" id="contactModalBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true">
@@ -1971,7 +2204,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.9.2-single-sql-release';
+    window.__CONVENIOS_BUILD__ = '8.9.3-dashboard-regional-filters';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -2208,7 +2441,7 @@ window.APP_CONFIG = Object.freeze({
 (() => {
   'use strict';
 
-  const AUTH_BUILD = '8.9.2-session-mfa';
+  const AUTH_BUILD = '8.9.3-session-mfa';
 
   const client = window.database?.client || null;
   const roleLabels = {
@@ -3505,7 +3738,7 @@ window.APP_CONFIG = Object.freeze({
       (error.code === 'PGRST204' || error.code === '42703' || normalized.includes('column'))
       && normalized.includes('marca')
     ) {
-      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql e tente novamente.');
+      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.3.sql e tente novamente.');
     }
     return new Error(message);
   }
@@ -5579,7 +5812,7 @@ window.APP_CONFIG = Object.freeze({
 (() => {
   'use strict';
 
-  const CLIENT_BUILD = '8.9.2-users-stable';
+  const CLIENT_BUILD = '8.9.3-users-stable';
 
   const getClient = () => window.database?.client || null;
   const endpoint = '/api/users-admin';
@@ -11651,6 +11884,450 @@ window.APP_CONFIG = Object.freeze({
       document.addEventListener('auth:signed-out',()=>{state.flowRules=[];state.operators=[];state.myMentions=[];state.goals=[];state.undoOperations=[];state.maintenance={ativo:false,mensagem:'',inicioEm:'',fimEm:''};renderMaintenanceMode();});
     }
 
+
+
+    // =====================================================================
+    // V8.9.3 — DASHBOARD INTERATIVO, FILTRO GLOBAL DE REGIÃO E NOMENCLATURA
+    // =====================================================================
+
+    const brazilRegionsV893 = Object.freeze({
+      Norte: ['AC','AM','AP','PA','RO','RR','TO'],
+      Nordeste: ['AL','BA','CE','MA','PB','PE','PI','RN','SE'],
+      'Centro-Oeste': ['DF','GO','MS','MT'],
+      Sudeste: ['ES','MG','RJ','SP'],
+      Sul: ['PR','RS','SC']
+    });
+
+    const brazilStateAliasesV893 = Object.freeze({
+      ACRE:'AC', ALAGOAS:'AL', AMAPA:'AP', AMAZONAS:'AM', BAHIA:'BA', CEARA:'CE',
+      'DISTRITO FEDERAL':'DF', 'ESPIRITO SANTO':'ES', GOIAS:'GO', MARANHAO:'MA',
+      'MATO GROSSO':'MT', 'MATO GROSSO DO SUL':'MS', 'MINAS GERAIS':'MG', PARA:'PA',
+      PARAIBA:'PB', PARANA:'PR', PERNAMBUCO:'PE', PIAUI:'PI', 'RIO DE JANEIRO':'RJ',
+      'RIO GRANDE DO NORTE':'RN', 'RIO GRANDE DO SUL':'RS', RONDONIA:'RO', RORAIMA:'RR',
+      'SANTA CATARINA':'SC', 'SAO PAULO':'SP', SERGIPE:'SE', TOCANTINS:'TO'
+    });
+
+    state.globalRegionFilterV893 = state.globalRegionFilterV893 || '';
+    state.dashboardMetricFilterV893 = state.dashboardMetricFilterV893 || 'total';
+
+    function normalizeStateKeyV893(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+    }
+
+    function companyRegionV893(company) {
+      const stateKey = normalizeStateKeyV893(company?.estado);
+      const uf = stateKey.length === 2 ? stateKey : (brazilStateAliasesV893[stateKey] || '');
+      return Object.entries(brazilRegionsV893).find(([, states]) => states.includes(uf))?.[0] || '';
+    }
+
+    function selectedGlobalRegionV893() {
+      return state.globalRegionFilterV893 || $('#globalRegionFilter')?.value || '';
+    }
+
+    function filterCompaniesByRegionV893(companies) {
+      const region = selectedGlobalRegionV893();
+      if (!region) return companies;
+      return (companies || []).filter((company) => companyRegionV893(company) === region);
+    }
+
+    function regionScopedCompaniesV893() {
+      return filterCompaniesByRegionV893(state.data.concedentes.map(normalizeCompany));
+    }
+
+    function withRegionScopedCompaniesV893(callback) {
+      const region = selectedGlobalRegionV893();
+      if (!region) return callback();
+      const original = state.data.concedentes;
+      state.data.concedentes = filterCompaniesByRegionV893(original);
+      try {
+        return callback();
+      } finally {
+        state.data.concedentes = original;
+      }
+    }
+
+    function dashboardDaysV893(company) {
+      const rawDays = company?.diasRestantes;
+      if (rawDays !== null && rawDays !== undefined && String(rawDays).trim() !== '') {
+        const direct = Number(rawDays);
+        if (Number.isFinite(direct)) return direct;
+      }
+      const calculated = vigenciaInfo(company?.inicioVigencia, company?.fimVigencia)?.days;
+      return calculated === null || calculated === undefined || Number.isNaN(Number(calculated))
+        ? null
+        : Number(calculated);
+    }
+
+    function dashboardMetricDefinitionsV893(baseData) {
+      const inProgressStatuses = new Set([
+        'Contato iniciado',
+        'Documentação solicitada',
+        'Documentação recebida',
+        'Em análise',
+        'Renovação em andamento'
+      ]);
+      const renewed = baseData.filter((company) => company.situacao === 'Renovado');
+      const renewalRate = baseData.length ? Math.round((renewed.length / baseData.length) * 100) : 0;
+      const days = (company) => dashboardDaysV893(company);
+
+      return [
+        {
+          section: 'Fluxo de renovação',
+          key: 'andamento',
+          label: 'Em andamento',
+          icon: 'fa-headset',
+          tone: 'primary',
+          value: baseData.filter((company) => inProgressStatuses.has(company.situacao)).length,
+          filter: (company) => inProgressStatuses.has(company.situacao)
+        },
+        {
+          key: 'nao-contatados',
+          label: 'Não contatados',
+          icon: 'fa-phone-slash',
+          tone: 'orange',
+          value: baseData.filter((company) => company.situacao === 'Não contatado').length,
+          filter: (company) => company.situacao === 'Não contatado'
+        },
+        {
+          key: 'aguardando-retorno',
+          label: 'Aguardando retorno',
+          icon: 'fa-hourglass-half',
+          tone: 'warning',
+          value: baseData.filter((company) => company.situacao === 'Aguardando retorno').length,
+          filter: (company) => company.situacao === 'Aguardando retorno'
+        },
+        {
+          key: 'renovados',
+          label: 'Renovados',
+          icon: 'fa-arrows-rotate',
+          tone: 'success',
+          value: renewed.length,
+          filter: (company) => company.situacao === 'Renovado'
+        },
+        {
+          key: 'taxa-renovacao',
+          label: 'Taxa de renovação',
+          icon: 'fa-percent',
+          tone: 'success',
+          value: `${renewalRate}%`,
+          hint: `${renewed.length} de ${baseData.length}`,
+          filter: (company) => company.situacao === 'Renovado'
+        },
+        {
+          section: 'Vigência dos convênios',
+          key: 'total',
+          label: 'Total',
+          icon: 'fa-file-contract',
+          tone: 'primary',
+          value: baseData.length,
+          filter: () => true
+        },
+        {
+          key: 'vencer-90-mais',
+          label: 'A vencer em 90+ dias',
+          icon: 'fa-calendar-check',
+          tone: 'success',
+          value: baseData.filter((company) => days(company) !== null && days(company) > 90).length,
+          filter: (company) => days(company) !== null && days(company) > 90
+        },
+        {
+          key: 'vencer-60',
+          label: 'A vencer em 60 dias',
+          icon: 'fa-calendar-days',
+          tone: 'warning',
+          value: baseData.filter((company) => days(company) !== null && days(company) > 30 && days(company) <= 90).length,
+          hint: '31 a 90 dias',
+          filter: (company) => days(company) !== null && days(company) > 30 && days(company) <= 90
+        },
+        {
+          key: 'vencer-30',
+          label: 'A vencer em 30 dias',
+          icon: 'fa-clock',
+          tone: 'orange',
+          value: baseData.filter((company) => days(company) !== null && days(company) >= 0 && days(company) <= 30).length,
+          hint: '0 a 30 dias',
+          filter: (company) => days(company) !== null && days(company) >= 0 && days(company) <= 30
+        },
+        {
+          key: 'vencidos',
+          label: 'Vencidos',
+          icon: 'fa-calendar-xmark',
+          tone: 'danger',
+          value: baseData.filter((company) => days(company) !== null && days(company) < 0).length,
+          filter: (company) => days(company) !== null && days(company) < 0
+        }
+      ];
+    }
+
+    function renderDashboardV893() {
+      const brandData = filterCompaniesByBrand(regionScopedCompaniesV893(), '#dashboardBrandFilter');
+      const definitions = dashboardMetricDefinitionsV893(brandData);
+      const validKeys = new Set(definitions.map((item) => item.key));
+      if (!validKeys.has(state.dashboardMetricFilterV893)) state.dashboardMetricFilterV893 = 'total';
+      const activeDefinition = definitions.find((item) => item.key === state.dashboardMetricFilterV893)
+        || definitions.find((item) => item.key === 'total');
+      const selectedData = brandData.filter(activeDefinition.filter);
+      const metricsHolder = $('#dashboardMetrics');
+
+      if (metricsHolder) {
+        metricsHolder.className = 'dashboard-metrics-sequenced';
+        metricsHolder.innerHTML = definitions.map((item) => `${item.section ? `<div class="dashboard-metric-section-title">${escapeHTML(item.section)}</div>` : ''}<button type="button" class="card metric-card dashboard-filter-card ${item.key === activeDefinition.key ? 'is-selected' : ''}" data-tone="${item.tone}" data-dashboard-metric="${item.key}" aria-pressed="${item.key === activeDefinition.key ? 'true' : 'false'}" title="Filtrar todos os gráficos por ${escapeHTML(item.label)}"><div class="metric-top"><div class="metric-icon"><i class="fa-solid ${item.icon}"></i></div><span class="dashboard-filter-indicator"><i class="fa-solid fa-filter"></i></span></div><div class="metric-value">${item.value}</div><div class="metric-label">${escapeHTML(item.label)}</div>${item.hint ? `<div class="metric-hint">${escapeHTML(item.hint)}</div>` : ''}</button>`).join('');
+      }
+
+      const selectedBrand = selectedBrandFilter('#dashboardBrandFilter');
+      const selectedRegion = selectedGlobalRegionV893();
+      const scopeParts = [
+        activeDefinition.label,
+        selectedBrand || 'Ambas as marcas',
+        selectedRegion || 'Todas as regiões'
+      ];
+      const summary = $('#dashboardSelectionSummary');
+      if (summary) {
+        summary.innerHTML = `<div><i class="fa-solid fa-filter"></i><span>Exibindo <strong>${escapeHTML(activeDefinition.label)}</strong> — ${selectedData.length} convênio(s)</span><small>${escapeHTML(scopeParts.slice(1).join(' • '))}</small></div><button type="button" class="btn btn-sm btn-secondary ${activeDefinition.key === 'total' ? 'hidden' : ''}" id="clearDashboardMetric"><i class="fa-solid fa-xmark"></i>Limpar indicador</button>`;
+      }
+
+      const contextText = `${activeDefinition.label} • ${selectedData.length} convênio(s)`;
+      const statusCard = $('#chartStatus')?.closest('.chart-card');
+      const stateCard = $('#chartState')?.closest('.chart-card');
+      const poloCard = $('#chartPolo')?.closest('.chart-card');
+      const upcomingCard = $('#upcomingList')?.closest('.card');
+      if (statusCard) {
+        const title = $('h3', statusCard); if (title) title.textContent = 'Convênios por situação da vigência';
+        const subtitle = $('.card-title span', statusCard); if (subtitle) subtitle.textContent = contextText;
+      }
+      if (stateCard) { const subtitle = $('.card-title span', stateCard); if (subtitle) subtitle.textContent = contextText; }
+      if (poloCard) { const subtitle = $('.card-title span', poloCard); if (subtitle) subtitle.textContent = contextText; }
+      if (upcomingCard) { const subtitle = $('.card-title span', upcomingCard); if (subtitle) subtitle.textContent = contextText; }
+
+      const byStatus = countBy(selectedData, (company) => company.situacaoVigencia);
+      const byState = countBy(selectedData, (company) => company.estado);
+      const byPolo = countBy(selectedData, (company) => company.polo);
+
+      createChart('status', 'chartStatus', {
+        type: 'doughnut',
+        data: { labels: Object.keys(byStatus), datasets: [{ data: Object.values(byStatus), backgroundColor: chartColors(), borderWidth: 0 }] },
+        options: { cutout: '64%', plugins: { legend: { position: 'bottom' } } }
+      });
+
+      const topStates = Object.entries(byState).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      createChart('state', 'chartState', {
+        type: 'bar',
+        data: { labels: topStates.map((item) => item[0]), datasets: [{ label: 'Convênios', data: topStates.map((item) => item[1]), backgroundColor: '#1D1934', borderRadius: 7 }] },
+        options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } } }
+      });
+
+      const polos = Object.entries(byPolo).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      createChart('polo', 'chartPolo', {
+        type: 'bar',
+        data: { labels: polos.map((item) => item[0]), datasets: [{ label: 'Convênios', data: polos.map((item) => item[1]), backgroundColor: '#FFC629', borderRadius: 7 }] },
+        options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } } }
+      });
+
+      const upcoming = selectedData
+        .filter((company) => company.fimVigencia)
+        .sort((a, b) => parseDate(a.fimVigencia) - parseDate(b.fimVigencia))
+        .slice(0, 7);
+      const upcomingList = $('#upcomingList');
+      if (upcomingList) {
+        upcomingList.innerHTML = upcoming.length
+          ? upcoming.map((company) => {
+              const info = vigenciaInfo(company.inicioVigencia, company.fimVigencia);
+              return `<li class="list-row"><span class="list-dot" style="background:${info.days < 0 ? '#dc2626' : info.days <= 30 ? '#f97316' : '#d9a200'}"></span><div class="list-main"><strong>${escapeHTML(company.nomeFantasia || company.razaoSocial)}</strong><small>${escapeHTML(company.cidade)}/${escapeHTML(company.estado)} • ${badgeForVigencia(company.situacaoVigencia)}</small></div><div class="list-side">${formatDate(company.fimVigencia)}<br>${info.days < 0 ? `há ${Math.abs(info.days)} dias` : `em ${info.days} dias`}</div></li>`;
+            }).join('')
+          : emptyState('Nenhum convênio nesta seleção', 'Escolha outro indicador, marca ou região.');
+      }
+    }
+
+    function ensureDashboardV893UI() {
+      $('#brandDashboardSummary')?.remove();
+      const dashboardMetrics = $('#dashboardMetrics');
+      if (dashboardMetrics && !$('#dashboardSelectionSummary')) {
+        dashboardMetrics.insertAdjacentHTML('afterend', '<div id="dashboardSelectionSummary" class="dashboard-filter-summary" aria-live="polite"></div>');
+      }
+      const topbarSearch = $('.topbar-search');
+      if (topbarSearch && !$('#globalRegionFilter')) {
+        topbarSearch.insertAdjacentHTML('afterend', `<label class="global-region-filter" title="Este filtro é aplicado aos painéis operacionais"><span>Região</span><select class="form-control" id="globalRegionFilter" aria-label="Filtrar todos os painéis por região"><option value="">Todas</option>${Object.keys(brazilRegionsV893).map((region) => `<option value="${region}">${region}</option>`).join('')}</select></label>`);
+      }
+      if ($('#globalRegionFilter')) $('#globalRegionFilter').value = state.globalRegionFilterV893;
+    }
+
+    function refreshRegionDependentPanelsV893() {
+      state.page = 1;
+      const scoped = regionScopedCompaniesV893();
+      if (state.selectedContactCompanyId && !scoped.some((company) => company.id === state.selectedContactCompanyId)) {
+        state.selectedContactCompanyId = scoped[0]?.id || null;
+      }
+      if (state.bulkSelectedIds instanceof Set) {
+        const visibleIds = new Set(scoped.map((company) => company.id));
+        [...state.bulkSelectedIds].forEach((id) => { if (!visibleIds.has(id)) state.bulkSelectedIds.delete(id); });
+      }
+      renderAll();
+      standardizeVisibleTerminologyV893(document.body);
+    }
+
+    function bindDashboardV893Events() {
+      $('#globalRegionFilter')?.addEventListener('change', (event) => {
+        state.globalRegionFilterV893 = event.target.value || '';
+        refreshRegionDependentPanelsV893();
+        toast('success', 'Filtro de região atualizado', state.globalRegionFilterV893 ? `Exibindo dados da região ${state.globalRegionFilterV893}.` : 'Exibindo dados de todas as regiões.');
+      });
+      document.addEventListener('click', (event) => {
+        const metric = event.target.closest?.('[data-dashboard-metric]');
+        if (metric) {
+          const key = metric.dataset.dashboardMetric || 'total';
+          state.dashboardMetricFilterV893 = state.dashboardMetricFilterV893 === key && key !== 'total' ? 'total' : key;
+          renderDashboardV893();
+          standardizeVisibleTerminologyV893($('#panel-dashboard'));
+          return;
+        }
+        if (event.target.closest?.('#clearDashboardMetric')) {
+          state.dashboardMetricFilterV893 = 'total';
+          renderDashboardV893();
+          standardizeVisibleTerminologyV893($('#panel-dashboard'));
+        }
+      });
+    }
+
+    function replaceTerminologyV893(value) {
+      let result = String(value ?? '');
+      const replacements = [
+        ['Empresas concedentes', 'Convênios'],
+        ['empresas concedentes', 'convênios'],
+        ['Cadastrar concedente', 'Cadastrar convênio'],
+        ['cadastrar concedente', 'cadastrar convênio'],
+        ['Nova concedente', 'Novo convênio'],
+        ['nova concedente', 'novo convênio'],
+        ['Editar concedente', 'Editar convênio'],
+        ['editar concedente', 'editar convênio'],
+        ['Excluir concedente', 'Excluir convênio'],
+        ['excluir concedente', 'excluir convênio'],
+        ['Salvar concedente', 'Salvar convênio'],
+        ['salvar concedente', 'salvar convênio'],
+        ['Detalhes da concedente', 'Detalhes do convênio'],
+        ['detalhes da concedente', 'detalhes do convênio'],
+        ['Selecione uma concedente', 'Selecione um convênio'],
+        ['selecione uma concedente', 'selecione um convênio'],
+        ['Nenhuma concedente', 'Nenhum convênio'],
+        ['nenhuma concedente', 'nenhum convênio'],
+        ['A concedente', 'O convênio'],
+        ['a concedente', 'o convênio'],
+        ['Da concedente', 'Do convênio'],
+        ['da concedente', 'do convênio'],
+        ['Uma concedente', 'Um convênio'],
+        ['uma concedente', 'um convênio'],
+        ['Esta concedente', 'Este convênio'],
+        ['esta concedente', 'este convênio'],
+        ['Cada concedente', 'Cada convênio'],
+        ['cada concedente', 'cada convênio'],
+        ['Concedente(s)', 'Convênio(s)'],
+        ['concedente(s)', 'convênio(s)'],
+        ['Concedentes', 'Convênios'],
+        ['concedentes', 'convênios']
+      ];
+      replacements.forEach(([from, to]) => { result = result.split(from).join(to); });
+      if (result.trim() === 'Concedente') result = result.replace('Concedente', 'Convênio');
+      if (result.trim() === 'concedente') result = result.replace('concedente', 'convênio');
+      return result;
+    }
+
+    function standardizeVisibleTerminologyV893(root = document.body) {
+      if (!root) return;
+      const processElement = (element) => {
+        if (!(element instanceof Element)) return;
+        ['placeholder', 'title', 'aria-label'].forEach((attribute) => {
+          if (!element.hasAttribute(attribute)) return;
+          const current = element.getAttribute(attribute);
+          const updated = replaceTerminologyV893(current);
+          if (updated !== current) element.setAttribute(attribute, updated);
+        });
+      };
+      if (root instanceof Element) processElement(root);
+      root.querySelectorAll?.('*').forEach(processElement);
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const tag = node.parentElement?.tagName;
+          if (['SCRIPT', 'STYLE', 'TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+          return node.nodeValue?.includes('concedent') || node.nodeValue?.includes('Concedent')
+            ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_REJECT;
+        }
+      });
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach((node) => {
+        const updated = replaceTerminologyV893(node.nodeValue);
+        if (updated !== node.nodeValue) node.nodeValue = updated;
+      });
+    }
+
+    let terminologyObserverV893 = null;
+    function startTerminologyStandardizerV893() {
+      standardizeVisibleTerminologyV893(document.body);
+      if (terminologyObserverV893) return;
+      terminologyObserverV893 = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const updated = replaceTerminologyV893(node.nodeValue);
+              if (updated !== node.nodeValue) node.nodeValue = updated;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              standardizeVisibleTerminologyV893(node);
+            }
+          });
+          if (mutation.type === 'characterData') {
+            const updated = replaceTerminologyV893(mutation.target.nodeValue);
+            if (updated !== mutation.target.nodeValue) mutation.target.nodeValue = updated;
+          }
+        });
+      });
+      terminologyObserverV893.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+
+    function wrapRegionRendererV893(name, renderer) {
+      return function(...args) {
+        return withRegionScopedCompaniesV893(() => renderer.apply(this, args));
+      };
+    }
+
+    const baseGetFilteredCompaniesV893 = getFilteredCompanies;
+    getFilteredCompanies = function() {
+      return filterCompaniesByRegionV893(baseGetFilteredCompaniesV893());
+    };
+
+    const baseManagementFilteredCompaniesV893 = managementFilteredCompanies;
+    managementFilteredCompanies = function() {
+      return filterCompaniesByRegionV893(baseManagementFilteredCompaniesV893());
+    };
+
+    renderDashboard = renderDashboardV893;
+    renderCompanies = wrapRegionRendererV893('renderCompanies', renderCompanies);
+    renderKanban = wrapRegionRendererV893('renderKanban', renderKanban);
+    renderContactsPanel = wrapRegionRendererV893('renderContactsPanel', renderContactsPanel);
+    renderWorkQueue = wrapRegionRendererV893('renderWorkQueue', renderWorkQueue);
+    renderDataQuality = wrapRegionRendererV893('renderDataQuality', renderDataQuality);
+    renderAlerts = wrapRegionRendererV893('renderAlerts', renderAlerts);
+    renderReports = wrapRegionRendererV893('renderReports', renderReports);
+    renderManagementReport = wrapRegionRendererV893('renderManagementReport', renderManagementReport);
+    renderCalendar = wrapRegionRendererV893('renderCalendar', renderCalendar);
+    renderExceptions = wrapRegionRendererV893('renderExceptions', renderExceptions);
+    renderGoals = wrapRegionRendererV893('renderGoals', renderGoals);
+
+    const baseRenderMyMentionsV893 = renderMyMentions;
+    renderMyMentions = function() {
+      const region = selectedGlobalRegionV893();
+      if (!region) return baseRenderMyMentionsV893();
+      const original = state.myMentions;
+      state.myMentions = (original || []).filter((mention) => companyRegionV893(mention.company) === region);
+      try { return baseRenderMyMentionsV893(); }
+      finally { state.myMentions = original; }
+    };
+
+
     window.conveniosApp = Object.freeze({
       getCompanies: () => state.data.concedentes.map(normalizeCompany),
       switchPanel,
@@ -11673,10 +12350,13 @@ window.APP_CONFIG = Object.freeze({
       ensureAdvancedManagementUI();
       ensureLegalNatureClassificationUI();
       runOptionalFeature('interface de automação e colaboração', ensureAutomationSuiteUI);
+      runOptionalFeature('Dashboard e filtro regional V8.9.3', ensureDashboardV893UI);
       bindEvents();
       bindWorkflowEnhancementEvents();
       bindAdvancedManagementEvents();
       runOptionalFeature('eventos de automação e colaboração', bindAutomationSuiteEvents);
+      runOptionalFeature('eventos do Dashboard V8.9.3', bindDashboardV893Events);
+      runOptionalFeature('padronização de nomenclatura V8.9.3', startTerminologyStandardizerV893);
       $('#naturezaJuridica')?.addEventListener('input', updateLegalNatureClassification);
       $('#naturezaJuridica')?.addEventListener('change', updateLegalNatureClassification);
       applyTheme();
@@ -11707,6 +12387,6 @@ window.APP_CONFIG = Object.freeze({
   })();
   </script>
 
-  <div id="releaseMarkerV84" data-version="8.9.2" hidden></div>
+  <div id="releaseMarkerV84" data-version="8.9.3" hidden></div>
 </body>
 </html>
