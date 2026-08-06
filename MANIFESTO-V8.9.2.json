@@ -1,0 +1,170 @@
+{
+  "projeto": "CloudConvenios",
+  "versao": "8.9.2",
+  "build": "8.9.2-single-sql-release",
+  "arquivo_sql_oficial": "supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql",
+  "index_na_raiz": true,
+  "total_arquivos_sem_manifesto": 32,
+  "arquivos": [
+    {
+      "arquivo": ".gitattributes",
+      "bytes": 99,
+      "sha256": "799b62d8a725911a2b4296a144624337ce3ba66574d83cf362ab4c528aa76521"
+    },
+    {
+      "arquivo": ".gitignore",
+      "bytes": 375,
+      "sha256": "b4d6239a77905599301f21234aa92c600908d0d778ca184fe605acc6e56140c7"
+    },
+    {
+      "arquivo": "404.html",
+      "bytes": 1126,
+      "sha256": "161b4ab723734761ac72f08e636fceac063a4a425fc2be505d5580eebeacbc73"
+    },
+    {
+      "arquivo": "CHANGELOG.md",
+      "bytes": 657,
+      "sha256": "72847240876b877d380e2500a2f81869d64ea82e09696cae4a3c308a46788b60"
+    },
+    {
+      "arquivo": "README.md",
+      "bytes": 1124,
+      "sha256": "596d6891d09f71dc318a17514722c34a93e48cb6fd890325f9088569cee8488c"
+    },
+    {
+      "arquivo": "VERSAO.txt",
+      "bytes": 81,
+      "sha256": "914e085c5fd852e21d2d66224ec23835b64c125e1eb558e837f198374f672c7e"
+    },
+    {
+      "arquivo": "_headers",
+      "bytes": 627,
+      "sha256": "81df499e0cb0d5433fc77f23fbcf73503de9b0a392296394339a48b25849c6c6"
+    },
+    {
+      "arquivo": "_routes.json",
+      "bytes": 61,
+      "sha256": "875208beeb02398614dd2f6dc8779c9261719bbf4f786a4464028dc2a191b29d"
+    },
+    {
+      "arquivo": "app.js",
+      "bytes": 350736,
+      "sha256": "3bbe5ac25aef2a6c5b9d6b45242a2022ee7f421c9a5ff958d51356276afb67b9"
+    },
+    {
+      "arquivo": "build-info.json",
+      "bytes": 297,
+      "sha256": "1630917d6997dc54dd0c497005edc5125771ef5688509ecea619d2425b5c96f1"
+    },
+    {
+      "arquivo": "css/style.css",
+      "bytes": 67420,
+      "sha256": "59258aa0257126512add95baad8ee593bafba6f0321e540ce150d7545adc66e9"
+    },
+    {
+      "arquivo": "docs/GUIA-SUPABASE-E-GITHUB.md",
+      "bytes": 3018,
+      "sha256": "d7df10c23040a796a5401a7fb606d6faa8a3b20f857455501506cbe2f79b376d"
+    },
+    {
+      "arquivo": "docs/RELATORIO-VALIDACAO-V8.9.2.md",
+      "bytes": 1408,
+      "sha256": "c5f76c962e837f28ac5c48a451f70f2df94630a7d3fd5327d541a3bccef3c873"
+    },
+    {
+      "arquivo": "docs/VARIAVEIS-CLOUDFLARE.md",
+      "bytes": 381,
+      "sha256": "cfc23ced9fc05fe0822d0b7860e2d683cef75bb72fb07b80e53bcc2096c2ec8f"
+    },
+    {
+      "arquivo": "functions/api/admin-data.js",
+      "bytes": 14466,
+      "sha256": "ee595db5bf5e1e7b2a62822b45b369a0d3e67d4f725deb243272e7cc5a45899d"
+    },
+    {
+      "arquivo": "functions/api/cnpj-lookup.js",
+      "bytes": 18984,
+      "sha256": "8dc5b09294162823f9131337d7f25ad02437c92a62a4f28445eaa9dfcdc4da57"
+    },
+    {
+      "arquivo": "functions/api/exports.js",
+      "bytes": 23174,
+      "sha256": "72f816b78216b7694190a933ff1e4cc3aadb6061029127169effb2614e4ad089"
+    },
+    {
+      "arquivo": "functions/api/health.js",
+      "bytes": 1380,
+      "sha256": "f5dde835479815809f84cd27641a77b268b37b1ec0da6f84b4d659dc8900fc04"
+    },
+    {
+      "arquivo": "functions/api/users-admin.js",
+      "bytes": 27782,
+      "sha256": "997fc3f29822f4047f0064354dcd73b52025284bb3818197ff38b109f0985bd4"
+    },
+    {
+      "arquivo": "functions/api/version.js",
+      "bytes": 800,
+      "sha256": "b4ad968f1b794737daa965cfcf664d2bcf8d3a2b7f53201c0e8b9857ae5bfc6b"
+    },
+    {
+      "arquivo": "index.html",
+      "bytes": 654733,
+      "sha256": "b40fc96428bb5df6c83eae0746d48bc9592db093a921f42152d841c1074308f4"
+    },
+    {
+      "arquivo": "js/app.js",
+      "bytes": 350736,
+      "sha256": "3bbe5ac25aef2a6c5b9d6b45242a2022ee7f421c9a5ff958d51356276afb67b9"
+    },
+    {
+      "arquivo": "js/audit.js",
+      "bytes": 26791,
+      "sha256": "045af52526955d1111ae3b9811ba21a5e82301136233433e697eccde52af41a3"
+    },
+    {
+      "arquivo": "js/auth.js",
+      "bytes": 24228,
+      "sha256": "048de21ff3567b3c36de3c38f298639d41add2d3db1b06950bac929c9b9c2283"
+    },
+    {
+      "arquivo": "js/cnpj-service.js",
+      "bytes": 16305,
+      "sha256": "a54d2dd953453d3bd54d55fec6735e3c11f4f7552d618b596fff237180c0612a"
+    },
+    {
+      "arquivo": "js/data-service.js",
+      "bytes": 47223,
+      "sha256": "7102c69dce1dfd6e2b5553f7be09ca2b3f6019b46fd7436e56e04454fe065662"
+    },
+    {
+      "arquivo": "js/notifications.js",
+      "bytes": 30495,
+      "sha256": "7901bb529f8b38aba5e269fb78cc8d54dc0479f76ed581a2a1b7d4c0cc697959"
+    },
+    {
+      "arquivo": "js/supabase-client.js",
+      "bytes": 5484,
+      "sha256": "297741e7669b2ad9044e06ffad00a4b9696bca5de55cf451c308a34b5efe7b62"
+    },
+    {
+      "arquivo": "js/supabase-config.js",
+      "bytes": 177,
+      "sha256": "016a138ad5f441c2d7008ba9f4cdd5dd173003b5086d341d3e36dcc068274167"
+    },
+    {
+      "arquivo": "js/user-management.js",
+      "bytes": 24852,
+      "sha256": "1034fb1228c3639c4db9d0c691722baad28ce3e99c9ca908aa2a43376eb82cc6"
+    },
+    {
+      "arquivo": "modelo/modelo_importacao_convenios.xlsx",
+      "bytes": 35767,
+      "sha256": "6b397157ab51d172619656f8a3fef741e13d998c454a2b330d093e0e276a9a40"
+    },
+    {
+      "arquivo": "supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql",
+      "bytes": 119169,
+      "sha256": "27eef520da5c8ba300d1efe7489d2861ed93c8d0ba0680ecc98bbcdb2760540c"
+    }
+  ]
+}

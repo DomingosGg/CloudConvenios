@@ -1,1 +1,1 @@
-8.9.1 - Revisão completa da raiz, campos restaurados e estabilidade operacional
+8.9.2 - Supabase consolidado em SQL único e pacote GitHub/Cloudflare organizado

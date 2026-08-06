@@ -2,8 +2,9 @@
   "platform": "Cloudflare Pages",
   "runtime": "Pages Functions",
   "branch": "main",
-  "version": "8.9.1",
-  "build": "8.9.1-reviewed-root-stability",
+  "version": "8.9.2",
+  "build": "8.9.2-single-sql-release",
   "supabase_project": "uvsilamqohytjuzdjrok",
+  "database_script": "supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql",
   "status": "production-ready"
 }

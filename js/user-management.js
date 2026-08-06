@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const CLIENT_BUILD = '8.4.0-users-stable';
+  const CLIENT_BUILD = '8.9.2-users-stable';
 
   const getClient = () => window.database?.client || null;
   const endpoint = '/api/users-admin';

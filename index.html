@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Sistema web para acompanhamento de renovações de convênios com empresas concedentes." />
-  <meta name="app-version" content="8.9.1" />
+  <meta name="app-version" content="8.9.2" />
   <title>Gestão de Renovações de Convênios</title>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -1328,7 +1328,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
     html[data-theme="dark"] .user-backend-error { color: #fca5a5; }
 
   </style>
-  <link rel="stylesheet" href="./css/style.css?v=8.9.1" />
+  <link rel="stylesheet" href="./css/style.css?v=8.9.2" />
 
 </head>
 <body class="auth-pending">
@@ -1971,7 +1971,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
   <script id="auth-emergency-bootstrap">
   (() => {
     'use strict';
-    window.__CONVENIOS_BUILD__ = '8.9.1-reviewed-root-stability';
+    window.__CONVENIOS_BUILD__ = '8.9.2-single-sql-release';
 
     // Proteção independente: nunca deixa a tela presa para sempre no carregamento.
     window.setTimeout(() => {
@@ -2208,7 +2208,7 @@ window.APP_CONFIG = Object.freeze({
 (() => {
   'use strict';
 
-  const AUTH_BUILD = '8.3.0-session-stable';
+  const AUTH_BUILD = '8.9.2-session-mfa';
 
   const client = window.database?.client || null;
   const roleLabels = {
@@ -3505,7 +3505,7 @@ window.APP_CONFIG = Object.freeze({
       (error.code === 'PGRST204' || error.code === '42703' || normalized.includes('column'))
       && normalized.includes('marca')
     ) {
-      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo 1-EXECUTAR-NO-SUPABASE.sql e tente novamente.');
+      return new Error('A coluna de marca ainda não foi criada no Supabase. Execute o arquivo supabase/SQL-UNICO-CLOUDCONVENIOS-V8.9.2.sql e tente novamente.');
     }
     return new Error(message);
   }
@@ -5579,7 +5579,7 @@ window.APP_CONFIG = Object.freeze({
 (() => {
   'use strict';
 
-  const CLIENT_BUILD = '8.4.0-users-stable';
+  const CLIENT_BUILD = '8.9.2-users-stable';
 
   const getClient = () => window.database?.client || null;
   const endpoint = '/api/users-admin';
@@ -11707,6 +11707,6 @@ window.APP_CONFIG = Object.freeze({
   })();
   </script>
 
-  <div id="releaseMarkerV84" data-version="8.4.0" hidden></div>
+  <div id="releaseMarkerV84" data-version="8.9.2" hidden></div>
 </body>
 </html>

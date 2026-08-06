@@ -1408,7 +1408,7 @@ html[data-theme="dark"] .api-fill-field.api-autofilled { color: #FFFFFF; }
 }
 
 
-/* V8.9.1 — campos consolidados, raiz sincronizada e cache corrigido */
+/* V8.9.2 — Supabase consolidado em SQL único e pacote organizado */
 .brand-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .brand-choice{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;transition:.2s}
 .brand-choice:hover{border-color:var(--primary);transform:translateY(-1px)}

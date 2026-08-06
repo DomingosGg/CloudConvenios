@@ -1,5 +1,5 @@
 const RELEASE = Object.freeze({
-  version: '8.4.0',
+  version: '8.9.2',
   name: 'CloudConvenios',
   platform: 'cloudflare-pages',
   features: {
